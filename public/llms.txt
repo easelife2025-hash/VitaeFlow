@@ -1,0 +1,23 @@
+# VitaeFlow AI Resume Builder
+
+> VitaeFlow is a web-based AI Resume Builder, Deterministic 8-Section ATS Quality Checker, Target Job Description Keyword Matcher, and 1:1 Vector A4 PDF Template Studio.
+
+## Core Capabilities
+- **Fact-Safe AI Resume Builder (`/resume-builder`)**: 8-section structured editor (Personal Info, Professional Summary, Work Experience, Education, Skills, Projects, Certifications, Languages) with server-side Gemini AI bullet point rewriting that preserves 100% of candidate facts without inventing credentials or metrics.
+- **Deterministic ATS Quality Checker (`/ats-checker`)**: Audits resume section completeness (0-100%), contact header parseability, chronological date consistency, action-verb strength, and quantified impact density.
+- **Target Job Description Keyword Matcher (`/job-matcher`)**: Compares a candidate's resume against any pasted job description to identify verified matched skills, missing relevant terms, and contextual tailoring recommendations.
+- **Designer A4 Template Studio (`/templates`)**: 6 switchable, ATS-parseable A4 layouts (Modern Accent, Executive Minimal, Split Column, Creative Studio, Professional Classic, Elegant Editorial) with customizable color palettes, Google Fonts (Inter, Lato, Roboto, Playfair Display), optional profile photo controls, and 1:1 selectable vector PDF export.
+- **Career & ATS Optimization Guides (`/blog`)**: Original technical guides on Applicant Tracking System parsing, quantified resume bullet points, job keyword matching, and A4 CV typography.
+
+## Public Indexable Routes
+- Homepage: https://ais-pre-6zm5vnqncwnbaa5e6ujfbf-641782429565.asia-southeast1.run.app/
+- AI Resume Builder: https://ais-pre-6zm5vnqncwnbaa5e6ujfbf-641782429565.asia-southeast1.run.app/resume-builder
+- Free ATS Resume Checker: https://ais-pre-6zm5vnqncwnbaa5e6ujfbf-641782429565.asia-southeast1.run.app/ats-checker
+- Target Job Description Matcher: https://ais-pre-6zm5vnqncwnbaa5e6ujfbf-641782429565.asia-southeast1.run.app/job-matcher
+- A4 Resume Templates: https://ais-pre-6zm5vnqncwnbaa5e6ujfbf-641782429565.asia-southeast1.run.app/templates
+- Career & ATS Blog Guides: https://ais-pre-6zm5vnqncwnbaa5e6ujfbf-641782429565.asia-southeast1.run.app/blog
+
+## Private / Non-Indexed Workspace Routes
+- `/dashboard` (Local user draft workspace - noindex)
+- `/settings` (Local user preferences & AI quota settings - noindex)
+- `/api/*` (Server-side endpoints - disallowed)

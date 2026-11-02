@@ -1,0 +1,6 @@
+{
+  "name": "VitaeFlow AI Resume Builder",
+  "description": "Build an ATS-friendly resume in minutes with VitaeFlow. Features AI bullet rewriting, live A4 templates, job keyword matching, and instant PDF export.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
