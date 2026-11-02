@@ -6,15 +6,15 @@
  * Never invents fake reviews, ratings, or unverified company addresses.
  */
 
-export const PRODUCTION_DOMAIN =
-  'https://ais-pre-6zm5vnqncwnbaa5e6ujfbf-641782429565.asia-southeast1.run.app';
+export const PRODUCTION_DOMAIN = 'https://vitae-flow-xi.vercel.app';
 
 export function getSiteUrl(): string {
   const rawUrl =
-    process.env.NEXT_PUBLIC_SITE_URL ||
-    process.env.APP_URL ||
-    PRODUCTION_DOMAIN;
-  return rawUrl.replace(/\/+$/, '');
+    process.env.NEXT_PUBLIC_SITE_URL?.trim() || PRODUCTION_DOMAIN;
+  const withProtocol = /^https?:\/\//i.test(rawUrl)
+    ? rawUrl
+    : `https://${rawUrl}`;
+  return withProtocol.replace(/\/+$/, '');
 }
 
 export const SITE_URL = getSiteUrl();
