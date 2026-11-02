@@ -1,6 +1,17 @@
 @import "tailwindcss";
 
 @layer base {
+  :root {
+    --font-display: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    --font-sans: 'DM Sans', system-ui, -apple-system, sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+    --font-inter: 'Inter', system-ui, -apple-system, sans-serif;
+    --font-lato: 'Lato', system-ui, -apple-system, sans-serif;
+    --font-roboto: 'Roboto', system-ui, -apple-system, sans-serif;
+    --font-playfair: 'Playfair Display', Georgia, serif;
+    --font-calligraphy: 'Great Vibes', cursive;
+  }
+
   body {
     font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
     color: #18181B;

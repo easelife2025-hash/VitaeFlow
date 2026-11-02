@@ -1,14 +1,4 @@
 import type { Metadata, Viewport } from 'next';
-import {
-  Plus_Jakarta_Sans,
-  DM_Sans,
-  JetBrains_Mono,
-  Inter,
-  Lato,
-  Roboto,
-  Playfair_Display,
-  Great_Vibes,
-} from 'next/font/google';
 import './globals.css';
 import { ResumeProvider } from '@/context/ResumeContext';
 import Header from '@/components/Header';
@@ -24,54 +14,6 @@ import {
   getWebsiteJsonLd,
   getWebApplicationJsonLd,
 } from '@/lib/seo';
-
-const plusJakarta = Plus_Jakarta_Sans({
-  subsets: ['latin'],
-  weight: ['500', '600', '700', '800'],
-  variable: '--font-display',
-});
-
-const dmSans = DM_Sans({
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
-  variable: '--font-sans',
-});
-
-const jetbrainsMono = JetBrains_Mono({
-  subsets: ['latin'],
-  weight: ['400', '500', '600'],
-  variable: '--font-mono',
-});
-
-const inter = Inter({
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700', '800'],
-  variable: '--font-inter',
-});
-
-const lato = Lato({
-  subsets: ['latin'],
-  weight: ['400', '700', '900'],
-  variable: '--font-lato',
-});
-
-const roboto = Roboto({
-  subsets: ['latin'],
-  weight: ['400', '500', '700'],
-  variable: '--font-roboto',
-});
-
-const playfair = Playfair_Display({
-  subsets: ['latin'],
-  weight: ['500', '600', '700', '800'],
-  variable: '--font-playfair',
-});
-
-const greatVibes = Great_Vibes({
-  subsets: ['latin'],
-  weight: ['400'],
-  variable: '--font-calligraphy',
-});
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -138,6 +80,9 @@ export const metadata: Metadata = {
   },
 };
 
+const GOOGLE_FONTS_URL =
+  'https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Great+Vibes&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Lato:wght@400;700;900&family=Playfair+Display:wght@500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Roboto:wght@400;500;700&display=swap';
+
 export default function RootLayout({
   children,
 }: {
@@ -147,10 +92,16 @@ export default function RootLayout({
   const webAppJsonLd = getWebApplicationJsonLd();
 
   return (
-    <html
-      lang="en"
-      className={`${plusJakarta.variable} ${dmSans.variable} ${jetbrainsMono.variable} ${inter.variable} ${lato.variable} ${roboto.variable} ${playfair.variable} ${greatVibes.variable}`}
-    >
+    <html lang="en">
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link
+          rel="preconnect"
+          href="https://fonts.gstatic.com"
+          crossOrigin="anonymous"
+        />
+        <link rel="stylesheet" href={GOOGLE_FONTS_URL} />
+      </head>
       <body
         suppressHydrationWarning
         className="bg-[#F8FAFC] text-[#18181B] antialiased selection:bg-[#6D5CE8]/15 selection:text-[#6D5CE8] min-h-screen flex flex-col"
