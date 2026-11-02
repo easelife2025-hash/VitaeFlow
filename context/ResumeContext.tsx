@@ -533,7 +533,7 @@ export function ResumeProvider({ children }: { children: React.ReactNode }) {
         mode={aiModalConfig.mode}
         missingAtsKeywords={activeResume.atsAnalysis?.missingKeywords}
         customLimit={customAiLimit}
-        onUsageUpdate={(u) => setAiUsage(u)}
+        onUsageUpdate={setAiUsage}
         onClose={() => setAiModalConfig((prev) => ({ ...prev, isOpen: false }))}
         onApply={aiModalConfig.onApply}
       />

@@ -6,7 +6,14 @@ import {
   generateContentWithModelFallback,
   cleanValidatedString,
 } from '@/lib/ai-guard';
-import { EnhancedBulletVariation } from '@/lib/types';
+import { buildFactSafeBulletVariations } from '@/lib/ai-fallback';
+import {
+  EnhancedBulletVariation,
+  BulletTone,
+  AiEnhancerMode,
+} from '@/lib/types';
+
+export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
   const quota = checkAndConsumeAiQuota(req);
@@ -17,8 +24,10 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  let parsedBody: Record<string, unknown> = {};
+
   try {
-    const body = await req.json();
+    parsedBody = await req.json();
     const {
       bullet,
       role = 'Professional',
@@ -26,7 +35,7 @@ export async function POST(req: NextRequest) {
       tone = 'impact',
       mode = 'rewrite_bullet',
       targetKeywords = [],
-    } = body;
+    } = parsedBody;
 
     const cleanBullet = cleanValidatedString(bullet);
     if (!cleanBullet || cleanBullet.length < 4) {
@@ -41,47 +50,39 @@ export async function POST(req: NextRequest) {
 
     const toneInstructions: Record<string, string> = {
       impact:
-        'Emphasize concrete outcomes and strong action verbs while strictly preserving only facts and numbers already stated in the original text.',
+        'Emphasize concrete outcomes and strong action verbs while strictly preserving only stated facts and numbers.',
       leadership:
-        'Emphasize ownership, collaboration, and execution clarity without inventing supervisory scope or false titles.',
+        'Emphasize ownership, collaboration, and execution clarity without inventing supervisory scope.',
       concise:
-        'Make it crisp, high-density, ATS-friendly, and scannable in one to two lines without filler words.',
+        'Make it crisp, high-density, ATS-friendly, and scannable without filler words.',
       clarity:
         'Polish grammar, sentence flow, professional phrasing, and active voice while keeping the exact meaning intact.',
     };
 
     const isImproveWording = mode === 'improve_wording';
+    const toneKey = String(tone || 'impact');
 
-    const prompt = `You are an executive resume editor and ATS optimization specialist.
-${
-  isImproveWording
-    ? `Improve the wording, grammar, flow, and professional tone of the following text for a "${cleanValidatedString(role, 'Professional')}" resume${company ? ` (${cleanValidatedString(company)})` : ''}.`
-    : `Rewrite the following resume bullet point for a "${cleanValidatedString(role, 'Professional')}" role${company ? ` at "${cleanValidatedString(company)}"` : ''}.`
-}
-
+    const prompt = `${
+      isImproveWording
+        ? `Polish wording and clarity for a "${cleanValidatedString(role, 'Professional')}" resume${company ? ` (${cleanValidatedString(company)})` : ''}.`
+        : `Rewrite this resume bullet for a "${cleanValidatedString(role, 'Professional')}" role${company ? ` at "${cleanValidatedString(company)}"` : ''}.`
+    }
 ${FACT_PRESERVATION_RULES}
-
-ORIGINAL USER TEXT:
-"${cleanBullet}"
-
-REQUESTED FOCUS:
-${toneInstructions[tone] || toneInstructions.impact}
+Original: "${cleanBullet}"
+Focus: ${toneInstructions[toneKey] || toneInstructions.impact}
 ${
   Array.isArray(targetKeywords) && targetKeywords.length > 0
-    ? `If truthful and naturally fitting the original statement, you may incorporate 1 of these keywords: ${targetKeywords
-        .slice(0, 5)
+    ? `Optional keywords if truthful: ${targetKeywords
+        .slice(0, 4)
         .map((k) => cleanValidatedString(k))
         .filter(Boolean)
         .join(', ')}`
     : ''
 }
-
-Return exactly 3 distinct, fact-preserving variations:
-1. Strong Action & Outcome Focus (preserves exact facts; never invents numbers)
-2. Polished Professional Wording & Flow
-3. Concise High-Clarity ATS Version
-
-Ensure every variation is 100% faithful to the user's original facts. In "metricsAdded", explain what wording, verb, or structural improvement was made and confirm that no unverified metrics were invented.`;
+Return 3 distinct, 100% fact-preserving variations:
+1. Action & Outcome Focus
+2. Polished Professional Wording
+3. Concise ATS Version`;
 
     const { response, usage: finalUsage } = await generateContentWithModelFallback(
       req,
@@ -97,23 +98,10 @@ Ensure every variation is 100% faithful to the user's original facts. In "metric
                 items: {
                   type: Type.OBJECT,
                   properties: {
-                    toneLabel: {
-                      type: Type.STRING,
-                      description: 'Short label for the style, e.g., Action & Outcome',
-                    },
-                    actionVerb: {
-                      type: Type.STRING,
-                      description: 'The lead verb or key opening word used',
-                    },
-                    text: {
-                      type: Type.STRING,
-                      description: 'The complete rewritten or polished text',
-                    },
-                    metricsAdded: {
-                      type: Type.STRING,
-                      description:
-                        'Note on how wording/clarity was improved while preserving the user facts',
-                    },
+                    toneLabel: { type: Type.STRING },
+                    actionVerb: { type: Type.STRING },
+                    text: { type: Type.STRING },
+                    metricsAdded: { type: Type.STRING },
                   },
                   required: ['toneLabel', 'actionVerb', 'text', 'metricsAdded'],
                 },
@@ -153,14 +141,21 @@ Ensure every variation is 100% faithful to the user's original facts. In "metric
       variations: validatedVariations,
       usage: finalUsage,
     });
-  } catch (error: unknown) {
-    const message =
-      error instanceof Error
-        ? error.message
-        : 'Failed to rewrite or improve wording with AI.';
-    return NextResponse.json(
-      { error: message, usage: quota.usage },
-      { status: 500 }
-    );
+  } catch {
+    const fallbackVariations = buildFactSafeBulletVariations({
+      bullet: String(parsedBody?.bullet || ''),
+      role: String(parsedBody?.role || 'Professional'),
+      company: String(parsedBody?.company || ''),
+      tone: (parsedBody?.tone as BulletTone) || 'impact',
+      mode: (parsedBody?.mode as AiEnhancerMode) || 'rewrite_bullet',
+      targetKeywords: Array.isArray(parsedBody?.targetKeywords)
+        ? (parsedBody.targetKeywords as string[])
+        : [],
+    });
+
+    return NextResponse.json({
+      variations: fallbackVariations,
+      usage: quota.usage,
+    });
   }
 }

@@ -6,7 +6,10 @@ import {
   generateContentWithModelFallback,
   cleanValidatedString,
 } from '@/lib/ai-guard';
+import { buildFactSafeSkillSuggestions } from '@/lib/ai-fallback';
 import { SuggestedSkillItem, SkillCategory } from '@/lib/types';
+
+export const maxDuration = 60;
 
 const VALID_CATEGORIES: SkillCategory[] = [
   'Core Technical',
@@ -23,8 +26,10 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  let parsedBody: Record<string, unknown> = {};
+
   try {
-    const body = await req.json();
+    parsedBody = await req.json();
     const {
       jobTitle = '',
       summary = '',
@@ -32,38 +37,44 @@ export async function POST(req: NextRequest) {
       projects = [],
       education = [],
       existingSkills = [],
-    } = body;
+    } = parsedBody;
 
     const currentSkillsList: string[] = Array.isArray(existingSkills)
       ? existingSkills.map((s) => cleanValidatedString(s)).filter(Boolean)
       : [];
 
     const expContext = Array.isArray(experience)
-      ? experience.slice(0, 5).map(
+      ? experience.slice(0, 4).map(
           (e: { role?: string; company?: string; bullets?: string[] }) => ({
             role: cleanValidatedString(e?.role),
             company: cleanValidatedString(e?.company),
             bullets: Array.isArray(e?.bullets)
-              ? e.bullets.map((b) => cleanValidatedString(b)).filter(Boolean)
+              ? e.bullets
+                  .slice(0, 3)
+                  .map((b) => cleanValidatedString(b))
+                  .filter(Boolean)
               : [],
           })
         )
       : [];
 
     const projContext = Array.isArray(projects)
-      ? projects.slice(0, 4).map(
+      ? projects.slice(0, 3).map(
           (p: { name?: string; subtitle?: string; bullets?: string[] }) => ({
             name: cleanValidatedString(p?.name),
             subtitle: cleanValidatedString(p?.subtitle),
             bullets: Array.isArray(p?.bullets)
-              ? p.bullets.map((b) => cleanValidatedString(b)).filter(Boolean)
+              ? p.bullets
+                  .slice(0, 2)
+                  .map((b) => cleanValidatedString(b))
+                  .filter(Boolean)
               : [],
           })
         )
       : [];
 
     const eduContext = Array.isArray(education)
-      ? education.slice(0, 3).map(
+      ? education.slice(0, 2).map(
           (ed: { degree?: string; field?: string }) =>
             `${cleanValidatedString(ed?.degree)} ${cleanValidatedString(ed?.field)}`.trim()
         )
@@ -84,24 +95,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const prompt = `You are a technical recruiter and ATS curriculum specialist.
-Analyze the candidate's existing resume facts below and suggest 8 relevant skills or ATS keywords that naturally align with their actual work experience, projects, education, and target role.
-
+    const prompt = `Suggest 8 relevant ATS skills aligned with this candidate's resume facts.
 ${FACT_PRESERVATION_RULES}
-
-ADDITIONAL RULES FOR SKILL SUGGESTIONS:
-- Do NOT suggest any skill that is already in the candidate's Existing Skills list (${currentSkillsList.join(', ') || 'None'}).
-- Only suggest skills that are directly evidenced by or strongly complementary to the candidate's stated experience, projects, or degree. Never suggest unrelated licenses or unverified certifications.
-- Categorize each suggested skill into one of: "Core Technical", "Domain & Tools", or "Transferable & Process".
-- Provide a brief 1-sentence "reason" explaining which part of the candidate's resume supports this skill.
-
-CANDIDATE RESUME CONTEXT:
-- Target Role: ${cleanValidatedString(jobTitle, 'Professional')}
-- Summary: ${cleanValidatedString(summary)}
-- Work Experience: ${JSON.stringify(expContext)}
-- Projects: ${JSON.stringify(projContext)}
-- Education: ${eduContext.join('; ')}
-- Existing Skills (Exclude these): ${currentSkillsList.join(', ')}`;
+Exclude existing skills: ${currentSkillsList.join(', ') || 'None'}
+Categories: "Core Technical", "Domain & Tools", "Transferable & Process"
+Role: ${cleanValidatedString(jobTitle, 'Professional')}
+Summary: ${cleanValidatedString(summary)}
+Experience: ${JSON.stringify(expContext)}
+Projects: ${JSON.stringify(projContext)}
+Education: ${eduContext.join('; ')}`;
 
     const { response, usage: finalUsage } = await generateContentWithModelFallback(
       req,
@@ -176,14 +178,35 @@ CANDIDATE RESUME CONTEXT:
       suggestions: validatedSuggestions.slice(0, 9),
       usage: finalUsage,
     });
-  } catch (error: unknown) {
-    const message =
-      error instanceof Error
-        ? error.message
-        : 'Failed to suggest relevant skills.';
-    return NextResponse.json(
-      { error: message, usage: quota.usage },
-      { status: 500 }
-    );
+  } catch {
+    const fallbackSuggestions = buildFactSafeSkillSuggestions({
+      jobTitle: String(parsedBody?.jobTitle || ''),
+      summary: String(parsedBody?.summary || ''),
+      experience: Array.isArray(parsedBody?.experience)
+        ? (parsedBody.experience as Array<{
+            role?: string;
+            company?: string;
+            bullets?: string[];
+          }>)
+        : [],
+      projects: Array.isArray(parsedBody?.projects)
+        ? (parsedBody.projects as Array<{
+            name?: string;
+            subtitle?: string;
+            bullets?: string[];
+          }>)
+        : [],
+      education: Array.isArray(parsedBody?.education)
+        ? (parsedBody.education as Array<{ degree?: string; field?: string }>)
+        : [],
+      existingSkills: Array.isArray(parsedBody?.existingSkills)
+        ? (parsedBody.existingSkills as string[])
+        : [],
+    });
+
+    return NextResponse.json({
+      suggestions: fallbackSuggestions,
+      usage: quota.usage,
+    });
   }
 }

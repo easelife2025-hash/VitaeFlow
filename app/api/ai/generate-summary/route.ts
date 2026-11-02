@@ -7,7 +7,10 @@ import {
   generateContentWithModelFallback,
   cleanValidatedString,
 } from '@/lib/ai-guard';
+import { buildFactSafeSummaryVariations } from '@/lib/ai-fallback';
 import { SummaryVariation } from '@/lib/types';
+
+export const maxDuration = 60;
 
 export async function GET(req: NextRequest) {
   const usage = getAiQuotaStatus(req);
@@ -23,8 +26,10 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  let parsedBody: Record<string, unknown> = {};
+
   try {
-    const body = await req.json();
+    parsedBody = await req.json();
     const {
       jobTitle = '',
       currentSummary = '',
@@ -32,11 +37,11 @@ export async function POST(req: NextRequest) {
       education = [],
       skills = [],
       projects = [],
-    } = body;
+    } = parsedBody;
 
     const expFacts = Array.isArray(experience)
       ? experience
-          .slice(0, 5)
+          .slice(0, 4)
           .map(
             (e: {
               role?: string;
@@ -49,14 +54,17 @@ export async function POST(req: NextRequest) {
               company: cleanValidatedString(e?.company),
               dates: `${cleanValidatedString(e?.startDate)} - ${cleanValidatedString(e?.endDate)}`,
               bullets: Array.isArray(e?.bullets)
-                ? e.bullets.map((b) => cleanValidatedString(b)).filter(Boolean)
+                ? e.bullets
+                    .slice(0, 3)
+                    .map((b) => cleanValidatedString(b))
+                    .filter(Boolean)
                 : [],
             })
           )
       : [];
 
     const eduFacts = Array.isArray(education)
-      ? education.slice(0, 3).map(
+      ? education.slice(0, 2).map(
           (ed: { degree?: string; field?: string; institution?: string }) =>
             `${cleanValidatedString(ed?.degree)} ${cleanValidatedString(ed?.field)} (${cleanValidatedString(ed?.institution)})`.trim()
         )
@@ -64,14 +72,14 @@ export async function POST(req: NextRequest) {
 
     const skillFacts = Array.isArray(skills)
       ? skills
-          .slice(0, 20)
+          .slice(0, 16)
           .map((s) => cleanValidatedString(s))
           .filter(Boolean)
       : [];
 
     const projFacts = Array.isArray(projects)
       ? projects
-          .slice(0, 3)
+          .slice(0, 2)
           .map((p: { name?: string; subtitle?: string }) =>
             `${cleanValidatedString(p?.name)}: ${cleanValidatedString(p?.subtitle)}`.trim()
           )
@@ -93,25 +101,20 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const prompt = `You are a senior career strategist and ATS resume specialist.
-Generate 3 distinct, factual professional resume summaries for this candidate based ONLY on the facts supplied below.
-
+    const prompt = `Generate 3 factual resume summaries based ONLY on these facts:
 ${FACT_PRESERVATION_RULES}
+Role: ${cleanValidatedString(jobTitle, 'Professional')}
+Draft: ${cleanValidatedString(currentSummary, 'None')}
+Experience: ${JSON.stringify(expFacts)}
+Skills: ${skillFacts.join(', ') || 'None'}
+Education: ${eduFacts.join('; ') || 'None'}
+Projects: ${projFacts.join('; ') || 'None'}
 
-CANDIDATE FACTS FROM RESUME:
-- Target Role / Headline: ${cleanValidatedString(jobTitle, 'Professional')}
-- Current Draft Summary (if any): ${cleanValidatedString(currentSummary, 'None')}
-- Work Experience History: ${JSON.stringify(expFacts)}
-- Skills: ${skillFacts.join(', ') || 'None listed'}
-- Education: ${eduFacts.join('; ') || 'None listed'}
-- Projects: ${projFacts.join('; ') || 'None listed'}
-
-Return exactly 3 variations:
-1. "Executive Overview" (2-3 polished sentences synthesizing role, domain, and actual experience highlights)
-2. "Results & Core Strengths" (2-3 high-clarity sentences emphasizing verified skills and stated accomplishments)
-3. "Concise ATS Profile" (A crisp 2-sentence summary optimized for quick recruiter scanning)
-
-For each variation, also provide "groundedFactsUsed" listing the exact facts from the candidate's input that were referenced (confirming zero invented claims or metrics).`;
+Return 3 variations:
+1. "Executive Overview" (2-3 sentences)
+2. "Results & Core Strengths" (2-3 sentences)
+3. "Concise ATS Profile" (2 sentences)
+Include brief "groundedFactsUsed" for each.`;
 
     const { response, usage: finalUsage } = await generateContentWithModelFallback(
       req,
@@ -165,14 +168,37 @@ For each variation, also provide "groundedFactsUsed" listing the exact facts fro
       variations: validatedVariations,
       usage: finalUsage,
     });
-  } catch (error: unknown) {
-    const message =
-      error instanceof Error
-        ? error.message
-        : 'Failed to generate professional summary.';
-    return NextResponse.json(
-      { error: message, usage: quota.usage },
-      { status: 500 }
-    );
+  } catch {
+    const fallbackVariations = buildFactSafeSummaryVariations({
+      jobTitle: String(parsedBody?.jobTitle || ''),
+      currentSummary: String(parsedBody?.currentSummary || ''),
+      experience: Array.isArray(parsedBody?.experience)
+        ? (parsedBody.experience as Array<{
+            role?: string;
+            company?: string;
+            startDate?: string;
+            endDate?: string;
+            bullets?: string[];
+          }>)
+        : [],
+      education: Array.isArray(parsedBody?.education)
+        ? (parsedBody.education as Array<{
+            degree?: string;
+            field?: string;
+            institution?: string;
+          }>)
+        : [],
+      skills: Array.isArray(parsedBody?.skills)
+        ? (parsedBody.skills as string[])
+        : [],
+      projects: Array.isArray(parsedBody?.projects)
+        ? (parsedBody.projects as Array<{ name?: string; subtitle?: string }>)
+        : [],
+    });
+
+    return NextResponse.json({
+      variations: fallbackVariations,
+      usage: quota.usage,
+    });
   }
 }

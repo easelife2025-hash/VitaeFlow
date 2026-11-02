@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Wand2,
   X,
@@ -17,6 +17,7 @@ import {
   EnhancedBulletVariation,
   AiUsageMetadata,
 } from '@/lib/types';
+import { buildFactSafeBulletVariations } from '@/lib/ai-fallback';
 
 interface AiBulletModalProps {
   isOpen: boolean;
@@ -53,14 +54,12 @@ export default function AiBulletModal({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const onUsageUpdateRef = useRef(onUsageUpdate);
   useEffect(() => {
-    setActiveMode(mode);
-    setSelectedTone(mode === 'improve_wording' ? 'clarity' : 'impact');
-    setDraftText(initialText);
-    setVariations([]);
-    setEditableVariations([]);
-    setError(null);
-  }, [initialText, mode, isOpen]);
+    onUsageUpdateRef.current = onUsageUpdate;
+  }, [onUsageUpdate]);
+
+  const autoTriggeredKeyRef = useRef<string>('');
 
   const handleGenerate = useCallback(
     async (
@@ -74,8 +73,14 @@ export default function AiBulletModal({
         return;
       }
 
+      const effectiveTone = toneOverride || selectedTone;
+      const effectiveMode = modeOverride || activeMode;
+
       setIsLoading(true);
       setError(null);
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 12000);
 
       try {
         const res = await fetch('/api/ai/enhance-bullet', {
@@ -88,31 +93,51 @@ export default function AiBulletModal({
             bullet: targetText,
             role: roleTitle || 'Professional',
             company: companyName,
-            tone: toneOverride || selectedTone,
-            mode: modeOverride || activeMode,
+            tone: effectiveTone,
+            mode: effectiveMode,
             targetKeywords: missingAtsKeywords,
           }),
+          signal: controller.signal,
         });
 
-        const data = await res.json();
-        if (data.usage && onUsageUpdate) {
-          onUsageUpdate(data.usage);
+        const data = await res.json().catch(() => ({}));
+        if (data.usage && onUsageUpdateRef.current) {
+          onUsageUpdateRef.current(data.usage);
         }
 
         if (!res.ok) {
           throw new Error(data.error || 'Failed to generate AI suggestions.');
         }
 
-        const list: EnhancedBulletVariation[] = data.variations || [];
+        const list: EnhancedBulletVariation[] =
+          Array.isArray(data.variations) && data.variations.length > 0
+            ? data.variations
+            : buildFactSafeBulletVariations({
+                bullet: targetText,
+                role: roleTitle || 'Professional',
+                company: companyName,
+                tone: effectiveTone,
+                mode: effectiveMode,
+                targetKeywords: missingAtsKeywords,
+              });
+
         setVariations(list);
         setEditableVariations(list.map((v) => v.text));
-      } catch (err: unknown) {
-        setError(
-          err instanceof Error
-            ? err.message
-            : 'Unable to reach AI assistant right now.'
-        );
+      } catch {
+        // Instant deterministic fact-safe fallback when offline, slow network, or API unavailable
+        const fallbackList = buildFactSafeBulletVariations({
+          bullet: targetText,
+          role: roleTitle || 'Professional',
+          company: companyName,
+          tone: effectiveTone,
+          mode: effectiveMode,
+          targetKeywords: missingAtsKeywords,
+        });
+        setVariations(fallbackList);
+        setEditableVariations(fallbackList.map((v) => v.text));
+        setError(null);
       } finally {
+        clearTimeout(timeoutId);
         setIsLoading(false);
       }
     },
@@ -124,17 +149,32 @@ export default function AiBulletModal({
       activeMode,
       missingAtsKeywords,
       customLimit,
-      onUsageUpdate,
     ]
   );
 
   useEffect(() => {
-    if (isOpen && initialText.trim().length > 6) {
-      handleGenerate(
-        mode === 'improve_wording' ? 'clarity' : 'impact',
-        initialText,
-        mode
-      );
+    if (!isOpen) {
+      autoTriggeredKeyRef.current = '';
+      return;
+    }
+
+    const triggerKey = `${mode}:${initialText.trim()}`;
+    if (autoTriggeredKeyRef.current === triggerKey) {
+      return;
+    }
+    autoTriggeredKeyRef.current = triggerKey;
+
+    setActiveMode(mode);
+    const initialTone: BulletTone =
+      mode === 'improve_wording' ? 'clarity' : 'impact';
+    setSelectedTone(initialTone);
+    setDraftText(initialText);
+    setVariations([]);
+    setEditableVariations([]);
+    setError(null);
+
+    if (initialText.trim().length > 4) {
+      void handleGenerate(initialTone, initialText, mode);
     }
   }, [isOpen, initialText, mode, handleGenerate]);
 

@@ -41,6 +41,10 @@ import {
   AiUsageMetadata,
   EditorSectionId,
 } from '@/lib/types';
+import {
+  buildFactSafeSummaryVariations,
+  buildFactSafeSkillSuggestions,
+} from '@/lib/ai-fallback';
 
 interface ResumeEditorProps {
   resume: ResumeDraft;
@@ -203,6 +207,9 @@ export default function ResumeEditor({
     setIsGeneratingSummary(true);
     setSummaryError(null);
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 12000);
+
     try {
       const res = await fetch('/api/ai/generate-summary', {
         method: 'POST',
@@ -218,29 +225,51 @@ export default function ResumeEditor({
           skills: resume.skills,
           projects: resume.projects,
         }),
+        signal: controller.signal,
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (data.usage) {
         onUpdateAiUsage(data.usage);
       }
 
       if (!res.ok) {
+        if (res.status === 400 && data.error) {
+          setSummaryError(data.error);
+          return;
+        }
         throw new Error(
           data.error || 'Failed to generate professional summary.'
         );
       }
 
-      const list: SummaryVariation[] = data.variations || [];
+      const list: SummaryVariation[] =
+        Array.isArray(data.variations) && data.variations.length > 0
+          ? data.variations
+          : buildFactSafeSummaryVariations({
+              jobTitle: resume.personalInfo.jobTitle,
+              currentSummary: resume.personalInfo.summary,
+              experience: resume.experience,
+              education: resume.education,
+              skills: resume.skills,
+              projects: resume.projects,
+            });
       setSummaryVariations(list);
       setEditableSummaries(list.map((v) => v.summaryText));
-    } catch (err: unknown) {
-      setSummaryError(
-        err instanceof Error
-          ? err.message
-          : 'Unable to generate summary suggestions right now.'
-      );
+    } catch {
+      const fallbackList = buildFactSafeSummaryVariations({
+        jobTitle: resume.personalInfo.jobTitle,
+        currentSummary: resume.personalInfo.summary,
+        experience: resume.experience,
+        education: resume.education,
+        skills: resume.skills,
+        projects: resume.projects,
+      });
+      setSummaryVariations(fallbackList);
+      setEditableSummaries(fallbackList.map((v) => v.summaryText));
+      setSummaryError(null);
     } finally {
+      clearTimeout(timeoutId);
       setIsGeneratingSummary(false);
     }
   }, [resume, customAiLimit, onUpdateAiUsage]);
@@ -249,6 +278,9 @@ export default function ResumeEditor({
   const handleSuggestSkillsWithAi = useCallback(async () => {
     setIsSuggestingSkills(true);
     setSkillsError(null);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 12000);
 
     try {
       const res = await fetch('/api/ai/suggest-skills', {
@@ -265,27 +297,49 @@ export default function ResumeEditor({
           education: resume.education,
           existingSkills: resume.skills,
         }),
+        signal: controller.signal,
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (data.usage) {
         onUpdateAiUsage(data.usage);
       }
 
       if (!res.ok) {
+        if (res.status === 400 && data.error) {
+          setSkillsError(data.error);
+          return;
+        }
         throw new Error(data.error || 'Failed to suggest relevant skills.');
       }
 
-      const list: SuggestedSkillItem[] = data.suggestions || [];
+      const list: SuggestedSkillItem[] =
+        Array.isArray(data.suggestions) && data.suggestions.length > 0
+          ? data.suggestions
+          : buildFactSafeSkillSuggestions({
+              jobTitle: resume.personalInfo.jobTitle,
+              summary: resume.personalInfo.summary,
+              experience: resume.experience,
+              projects: resume.projects,
+              education: resume.education,
+              existingSkills: resume.skills,
+            });
       setAiSkillSuggestions(list);
       setSelectedAiSkills(list.map((item) => item.skill));
-    } catch (err: unknown) {
-      setSkillsError(
-        err instanceof Error
-          ? err.message
-          : 'Unable to fetch skill suggestions right now.'
-      );
+    } catch {
+      const fallbackList = buildFactSafeSkillSuggestions({
+        jobTitle: resume.personalInfo.jobTitle,
+        summary: resume.personalInfo.summary,
+        experience: resume.experience,
+        projects: resume.projects,
+        education: resume.education,
+        existingSkills: resume.skills,
+      });
+      setAiSkillSuggestions(fallbackList);
+      setSelectedAiSkills(fallbackList.map((item) => item.skill));
+      setSkillsError(null);
     } finally {
+      clearTimeout(timeoutId);
       setIsSuggestingSkills(false);
     }
   }, [resume, customAiLimit, onUpdateAiUsage]);

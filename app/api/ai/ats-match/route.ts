@@ -7,7 +7,10 @@ import {
   cleanValidatedString,
 } from '@/lib/ai-guard';
 import { evaluateResumeDeterministically } from '@/lib/ats-deterministic';
-import { EditorSectionId } from '@/lib/types';
+import { buildFactSafeBulletVariations } from '@/lib/ai-fallback';
+import { EditorSectionId, ResumeDraft } from '@/lib/types';
+
+export const maxDuration = 60;
 
 const VALID_SECTIONS: EditorSectionId[] = [
   'personal',
@@ -37,9 +40,14 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  let resumeData: ResumeDraft | undefined;
+  let jdText = '';
+
   try {
     const body = await req.json();
     const { resume, jobDescription } = body;
+    resumeData = resume;
+    jdText = typeof jobDescription === 'string' ? jobDescription.trim() : '';
 
     if (
       !jobDescription ||
@@ -283,14 +291,70 @@ Return a JSON object containing:
       },
       usage: finalUsage,
     });
-  } catch (error: unknown) {
-    const message =
-      error instanceof Error
-        ? error.message
-        : 'Failed to analyze job description match.';
-    return NextResponse.json(
-      { error: message, usage: quota.usage },
-      { status: 500 }
-    );
+  } catch {
+    if (!resumeData || !jdText) {
+      return NextResponse.json(
+        {
+          error: 'Unable to analyze job description right now.',
+          usage: quota.usage,
+        },
+        { status: 500 }
+      );
+    }
+
+    const deterministic = evaluateResumeDeterministically(resumeData, jdText);
+    const existingBullets =
+      resumeData.experience?.flatMap((e) => e.bullets || []).filter(Boolean) ||
+      [];
+    const sampleBullets = existingBullets.slice(0, 2).map((b) => {
+      const polished = buildFactSafeBulletVariations({
+        bullet: b,
+        role: resumeData?.personalInfo?.jobTitle || 'Professional',
+        tone: 'impact',
+        targetKeywords: deterministic.missingKeywords.slice(0, 2),
+      })[0];
+      return {
+        original: b,
+        improved: polished?.text || b,
+        reason:
+          'Strengthened action phrasing while preserving your exact stated facts.',
+        targetSection: 'experience' as EditorSectionId,
+      };
+    });
+
+    return NextResponse.json({
+      analysis: {
+        jobTitle: resumeData.personalInfo?.jobTitle || 'Target Role',
+        score: deterministic.estimatedQualityScore,
+        roleAlignmentScore: deterministic.completenessScore,
+        impactMetricsScore: deterministic.formattingScore,
+        keywordCoverageScore: deterministic.keywordCoverageScore,
+        summaryFeedback: `Your resume matches ${deterministic.matchedKeywords.length} key terms from the job description with a ${deterministic.completenessScore}% section completeness score. Review any missing terms below and add them only where they reflect your real experience.`,
+        matchedKeywords: deterministic.matchedKeywords,
+        missingKeywords: deterministic.missingKeywords,
+        actionableSuggestions: [
+          ...(deterministic.missingKeywords.length > 0
+            ? [
+                {
+                  title: 'Review Missing Job Description Keywords',
+                  advice: `Consider adding relevant skills (${deterministic.missingKeywords.slice(0, 5).join(', ')}) to your Skills or Experience sections if you have hands-on experience with them.`,
+                  targetSection: 'skills' as EditorSectionId,
+                  priority: 'high' as const,
+                },
+              ]
+            : []),
+          {
+            title: 'Tailor Professional Summary Headline',
+            advice:
+              'Align your opening summary sentence with the core competencies emphasized in the job posting.',
+            targetSection: 'summary' as EditorSectionId,
+            priority: 'medium' as const,
+          },
+        ],
+        bulletSuggestions: sampleBullets,
+        analyzedAt: new Date().toISOString(),
+      },
+      usage: quota.usage,
+    });
   }
 }
