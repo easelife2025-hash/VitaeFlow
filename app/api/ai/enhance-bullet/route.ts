@@ -11,6 +11,7 @@ import {
   EnhancedBulletVariation,
   BulletTone,
   AiEnhancerMode,
+  WholeResumeContextSnapshot,
 } from '@/lib/types';
 
 export const maxDuration = 60;
@@ -35,6 +36,7 @@ export async function POST(req: NextRequest) {
       tone = 'impact',
       mode = 'rewrite_bullet',
       targetKeywords = [],
+      resumeContext,
     } = parsedBody;
 
     const cleanBullet = cleanValidatedString(bullet);
@@ -48,41 +50,89 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const ctx = (resumeContext || {}) as WholeResumeContextSnapshot;
+    const ctxSkills = Array.isArray(ctx.skills)
+      ? ctx.skills.slice(0, 15).join(', ')
+      : '';
+    const ctxRoles = Array.isArray(ctx.experience)
+      ? ctx.experience
+          .slice(0, 3)
+          .map((e) => `${e.role || ''} at ${e.company || ''}`.trim())
+          .filter(Boolean)
+          .join('; ')
+      : '';
+    const ctxProjects = Array.isArray(ctx.projects)
+      ? ctx.projects
+          .slice(0, 2)
+          .map((p) => p.name)
+          .filter(Boolean)
+          .join(', ')
+      : '';
+
     const toneInstructions: Record<string, string> = {
       impact:
-        'Emphasize concrete outcomes and strong action verbs while strictly preserving only stated facts and numbers.',
+        'Invert or restructure clauses to foreground the measurable outcome/result first, using commanding executive action verbs.',
       leadership:
-        'Emphasize ownership, collaboration, and execution clarity without inventing supervisory scope.',
+        'Restructure around strategic ownership, cross-functional alignment, and execution authority.',
       concise:
-        'Make it crisp, high-density, ATS-friendly, and scannable without filler words.',
+        'Condense and tighten phrasing into a punchy, high-density ATS statement with zero filler words.',
       clarity:
-        'Polish grammar, sentence flow, professional phrasing, and active voice while keeping the exact meaning intact.',
+        'Substantially elevate sentence flow, active voice, and executive vocabulary while preserving exact facts.',
     };
 
     const isImproveWording = mode === 'improve_wording';
     const toneKey = String(tone || 'impact');
 
-    const prompt = `${
+    const fallbackList = buildFactSafeBulletVariations({
+      bullet: cleanBullet,
+      role: cleanValidatedString(role, ctx.jobTitle || 'Professional'),
+      company: cleanValidatedString(company),
+      tone: (toneKey as BulletTone) || 'impact',
+      mode: (mode as AiEnhancerMode) || 'rewrite_bullet',
+      targetKeywords: Array.isArray(targetKeywords)
+        ? (targetKeywords as string[])
+        : [],
+      resumeContext: ctx,
+    });
+
+    const prompt = `You are an executive resume strategist. ${
       isImproveWording
-        ? `Polish wording and clarity for a "${cleanValidatedString(role, 'Professional')}" resume${company ? ` (${cleanValidatedString(company)})` : ''}.`
-        : `Rewrite this resume bullet for a "${cleanValidatedString(role, 'Professional')}" role${company ? ` at "${cleanValidatedString(company)}"` : ''}.`
+        ? `Substantially rewrite and elevate the wording, structure, and flow of this text for a "${cleanValidatedString(role, ctx.jobTitle || 'Professional')}" resume${company ? ` (${cleanValidatedString(company)})` : ''}.`
+        : `Substantially rewrite and restructure this resume bullet point for a "${cleanValidatedString(role, ctx.jobTitle || 'Professional')}" role${company ? ` at "${cleanValidatedString(company)}"` : ''}.`
     }
+
 ${FACT_PRESERVATION_RULES}
-Original: "${cleanBullet}"
-Focus: ${toneInstructions[toneKey] || toneInstructions.impact}
+
+CRITICAL REWRITING REQUIREMENT:
+- NEVER return the original text unchanged or with only 1-2 words swapped.
+- Every variation MUST substantially restructure the sentence syntax, clause order, and vocabulary so the user sees a clear, high-value improvement over their original draft while keeping 100% of their real facts and numbers accurate.
+
+WHOLE-RESUME CONTEXT (Use to align terminology and seniority):
+- Target Headline: ${cleanValidatedString(ctx.jobTitle || role, 'Professional')}
+- Candidate Skills: ${ctxSkills || 'Not specified'}
+- Career Roles: ${ctxRoles || 'Not specified'}
+- Projects: ${ctxProjects || 'Not specified'}
+
+ORIGINAL USER TEXT:
+"${cleanBullet}"
+
+REQUESTED FOCUS:
+${toneInstructions[toneKey] || toneInstructions.impact}
 ${
   Array.isArray(targetKeywords) && targetKeywords.length > 0
-    ? `Optional keywords if truthful: ${targetKeywords
+    ? `Optional ATS terms if truthful to the statement: ${targetKeywords
         .slice(0, 4)
         .map((k) => cleanValidatedString(k))
         .filter(Boolean)
         .join(', ')}`
     : ''
 }
-Return 3 distinct, 100% fact-preserving variations:
-1. Action & Outcome Focus
-2. Polished Professional Wording
-3. Concise ATS Version`;
+
+Return 3 genuinely distinct, restructured variations:
+1. "Outcome-First Impact" (Restructures the sentence to foreground the measurable result or deliverable impact first)
+2. "Executive & Domain Authority" (Elevates vocabulary, technical/domain precision, and cross-functional framing)
+3. "Concise High-Density ATS" (Tightens syntax into a crisp, high-signal ATS achievement statement)
+In "metricsAdded", briefly state how the clause structure and vocabulary were transformed.`;
 
     const { response, usage: finalUsage } = await generateContentWithModelFallback(
       req,
@@ -118,23 +168,46 @@ Return 3 distinct, 100% fact-preserving variations:
     const parsed = JSON.parse(rawText);
     const rawList = Array.isArray(parsed.variations) ? parsed.variations : [];
 
+    const normalizedOrig = cleanBullet
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '');
+
     const validatedVariations: EnhancedBulletVariation[] = rawList
-      .map((v: Record<string, unknown>) => ({
-        toneLabel: cleanValidatedString(v?.toneLabel, 'Polished Variation'),
-        actionVerb: cleanValidatedString(v?.actionVerb, 'Led'),
-        text: cleanValidatedString(v?.text),
-        metricsAdded: cleanValidatedString(
-          v?.metricsAdded,
-          'Strengthened phrasing while preserving your stated facts.'
-        ),
-      }))
-      .filter((v: EnhancedBulletVariation) => v.text.length >= 10)
+      .map((v: Record<string, unknown>, idx: number) => {
+        const candidateText = cleanValidatedString(v?.text);
+        const normalizedCand = candidateText
+          .toLowerCase()
+          .replace(/[^a-z0-9]/g, '');
+
+        // Guarantee the variation is never identical to the original text
+        if (!candidateText || normalizedCand === normalizedOrig) {
+          return fallbackList[idx] || fallbackList[0];
+        }
+
+        return {
+          toneLabel: cleanValidatedString(
+            v?.toneLabel,
+            fallbackList[idx]?.toneLabel || 'Polished Variation'
+          ),
+          actionVerb: cleanValidatedString(
+            v?.actionVerb,
+            candidateText.split(/\s+/)[0]?.replace(/[^a-zA-Z]/g, '') || 'Led'
+          ),
+          text: candidateText,
+          metricsAdded: cleanValidatedString(
+            v?.metricsAdded,
+            'Restructured phrasing and elevated vocabulary while preserving your stated facts.'
+          ),
+        };
+      })
+      .filter((v: EnhancedBulletVariation) => Boolean(v && v.text.length >= 10))
       .slice(0, 3);
 
     if (validatedVariations.length === 0) {
-      throw new Error(
-        'AI response validation failed: No valid wording variations were generated.'
-      );
+      return NextResponse.json({
+        variations: fallbackList,
+        usage: finalUsage,
+      });
     }
 
     return NextResponse.json({
@@ -151,6 +224,7 @@ Return 3 distinct, 100% fact-preserving variations:
       targetKeywords: Array.isArray(parsedBody?.targetKeywords)
         ? (parsedBody.targetKeywords as string[])
         : [],
+      resumeContext: (parsedBody?.resumeContext || {}) as WholeResumeContextSnapshot,
     });
 
     return NextResponse.json({

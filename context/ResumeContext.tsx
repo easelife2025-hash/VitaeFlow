@@ -21,8 +21,10 @@ import {
 import { SAMPLE_RESUMES, createBlankResume } from '@/lib/sample-data';
 import { downloadResumePdf } from '@/lib/pdf-export';
 import AiBulletModal from '@/components/AiBulletModal';
+import AiFullResumePolishModal from '@/components/AiFullResumePolishModal';
 import ImportResumeModal from '@/components/ImportResumeModal';
 import DraftsModal from '@/components/DraftsModal';
+import { createResumeContextSnapshot } from '@/lib/ai-fallback';
 
 const STORAGE_KEY = 'vitaeflow_resumes_v2';
 const PREFS_KEY = 'vitaeflow_prefs_v1';
@@ -87,6 +89,7 @@ interface ResumeContextValue {
   handleResetAiQuota: () => void;
   openDefaultAiEnhancer: () => void;
   openAiEnhancer: (cfg: AiModalOpenConfig) => void;
+  openFullResumePolishModal: () => void;
   openImportModal: () => void;
   openDraftsModal: () => void;
   isMobileDrawerOpen: boolean;
@@ -108,6 +111,7 @@ export function ResumeProvider({ children }: { children: React.ReactNode }) {
     useState<EditorSectionId>('personal');
   const [isDraftsModalOpen, setIsDraftsModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isFullPolishModalOpen, setIsFullPolishModalOpen] = useState(false);
   const [hasLoadedStorage, setHasLoadedStorage] = useState(false);
 
   // Navigation Sidebar & Mobile Drawer state
@@ -514,6 +518,7 @@ export function ResumeProvider({ children }: { children: React.ReactNode }) {
         handleResetAiQuota,
         openDefaultAiEnhancer,
         openAiEnhancer,
+        openFullResumePolishModal: () => setIsFullPolishModalOpen(true),
         openImportModal: () => setIsImportModalOpen(true),
         openDraftsModal: () => setIsDraftsModalOpen(true),
         isMobileDrawerOpen,
@@ -532,10 +537,21 @@ export function ResumeProvider({ children }: { children: React.ReactNode }) {
         companyName={aiModalConfig.companyName}
         mode={aiModalConfig.mode}
         missingAtsKeywords={activeResume.atsAnalysis?.missingKeywords}
+        resumeContext={createResumeContextSnapshot(activeResume)}
         customLimit={customAiLimit}
         onUsageUpdate={setAiUsage}
         onClose={() => setAiModalConfig((prev) => ({ ...prev, isOpen: false }))}
         onApply={aiModalConfig.onApply}
+      />
+
+      {/* Global Whole-Resume AI Polish & Alignment Modal */}
+      <AiFullResumePolishModal
+        isOpen={isFullPolishModalOpen}
+        resume={activeResume}
+        customLimit={customAiLimit}
+        onUsageUpdate={setAiUsage}
+        onApplyPolishedResume={handleUpdateActiveResume}
+        onClose={() => setIsFullPolishModalOpen(false)}
       />
 
       {/* Global Import Resume Modal */}

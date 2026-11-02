@@ -375,6 +375,53 @@ export interface AiUsageMetadata {
   autoSwitchEnabled?: boolean;
 }
 
+export interface WholeResumeContextSnapshot {
+  jobTitle?: string;
+  summary?: string;
+  skills?: string[];
+  experience?: {
+    role?: string;
+    company?: string;
+    startDate?: string;
+    endDate?: string;
+    bullets?: string[];
+  }[];
+  projects?: {
+    name?: string;
+    subtitle?: string;
+    bullets?: string[];
+  }[];
+  education?: {
+    degree?: string;
+    field?: string;
+    institution?: string;
+  }[];
+  certifications?: {
+    name?: string;
+    issuer?: string;
+  }[];
+  jobDescriptionDraft?: string;
+}
+
+export interface WholeResumeBulletUpgrade {
+  id: string;
+  section: 'experience' | 'projects';
+  itemId: string;
+  bulletIndex: number;
+  contextLabel: string;
+  original: string;
+  improved: string;
+  changeSummary: string;
+}
+
+export interface WholeResumePolishResult {
+  improvedSummary: string;
+  summaryReasoning: string;
+  bulletUpgrades: WholeResumeBulletUpgrade[];
+  recommendedSkills: SuggestedSkillItem[];
+  alignmentHighlights: string[];
+}
+
 export function resolveResumeColors(resume: ResumeDraft): CustomColors {
   const primary = resume.customColors?.primary || resume.accentColor || '#6D5CE8';
   const accent =

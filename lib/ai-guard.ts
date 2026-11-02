@@ -251,8 +251,6 @@ export async function generateContentWithModelFallback(
     const candidateIndex = (startIndex + attempt) % GEMINI_MODELS_CHAIN.length;
     const candidateModel = GEMINI_MODELS_CHAIN[candidateIndex];
 
-    // Configure ThinkingLevel.LOW for gemini-3.8-flash to minimize latency;
-    // gemini-3.1-flash-lite already defaults to MINIMAL (zero thinking latency).
     const modelConfig =
       candidateModel.id === 'gemini-3.8-flash'
         ? {
@@ -262,14 +260,31 @@ export async function generateContentWithModelFallback(
         : params.config;
 
     try {
-      const response = await withTimeout(
-        ai.models.generateContent({
-          ...params,
-          model: candidateModel.id,
-          config: modelConfig,
-        }),
-        7000
-      );
+      let response: GenerateContentResponse;
+      try {
+        response = await withTimeout(
+          ai.models.generateContent({
+            ...params,
+            model: candidateModel.id,
+            config: modelConfig,
+          }),
+          9000
+        );
+      } catch (innerErr: unknown) {
+        // If thinkingConfig caused a 400 Invalid Argument on this endpoint, retry immediately with standard config
+        if (candidateModel.id === 'gemini-3.8-flash') {
+          response = await withTimeout(
+            ai.models.generateContent({
+              ...params,
+              model: candidateModel.id,
+              config: params.config,
+            }),
+            9000
+          );
+        } else {
+          throw innerErr;
+        }
+      }
 
       if (attempt > 0) {
         const prevModel = GEMINI_MODELS_CHAIN[startIndex];

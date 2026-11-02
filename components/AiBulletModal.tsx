@@ -10,12 +10,14 @@ import {
   ArrowRight,
   ShieldCheck,
   Sparkles,
+  Layers,
 } from 'lucide-react';
 import {
   BulletTone,
   AiEnhancerMode,
   EnhancedBulletVariation,
   AiUsageMetadata,
+  WholeResumeContextSnapshot,
 } from '@/lib/types';
 import { buildFactSafeBulletVariations } from '@/lib/ai-fallback';
 
@@ -26,6 +28,7 @@ interface AiBulletModalProps {
   companyName?: string;
   mode?: AiEnhancerMode;
   missingAtsKeywords?: string[];
+  resumeContext?: WholeResumeContextSnapshot;
   customLimit?: number;
   onUsageUpdate?: (usage: AiUsageMetadata) => void;
   onClose: () => void;
@@ -39,7 +42,8 @@ export default function AiBulletModal({
   companyName = '',
   mode = 'rewrite_bullet',
   missingAtsKeywords = [],
-  customLimit = 30,
+  resumeContext,
+  customLimit = 50,
   onUsageUpdate,
   onClose,
   onApply,
@@ -58,6 +62,11 @@ export default function AiBulletModal({
   useEffect(() => {
     onUsageUpdateRef.current = onUsageUpdate;
   }, [onUsageUpdate]);
+
+  const resumeContextRef = useRef(resumeContext);
+  useEffect(() => {
+    resumeContextRef.current = resumeContext;
+  }, [resumeContext]);
 
   const autoTriggeredKeyRef = useRef<string>('');
 
@@ -91,11 +100,12 @@ export default function AiBulletModal({
           },
           body: JSON.stringify({
             bullet: targetText,
-            role: roleTitle || 'Professional',
+            role: roleTitle || resumeContextRef.current?.jobTitle || 'Professional',
             company: companyName,
             tone: effectiveTone,
             mode: effectiveMode,
             targetKeywords: missingAtsKeywords,
+            resumeContext: resumeContextRef.current,
           }),
           signal: controller.signal,
         });
@@ -114,24 +124,29 @@ export default function AiBulletModal({
             ? data.variations
             : buildFactSafeBulletVariations({
                 bullet: targetText,
-                role: roleTitle || 'Professional',
+                role:
+                  roleTitle ||
+                  resumeContextRef.current?.jobTitle ||
+                  'Professional',
                 company: companyName,
                 tone: effectiveTone,
                 mode: effectiveMode,
                 targetKeywords: missingAtsKeywords,
+                resumeContext: resumeContextRef.current,
               });
 
         setVariations(list);
         setEditableVariations(list.map((v) => v.text));
       } catch {
-        // Instant deterministic fact-safe fallback when offline, slow network, or API unavailable
         const fallbackList = buildFactSafeBulletVariations({
           bullet: targetText,
-          role: roleTitle || 'Professional',
+          role:
+            roleTitle || resumeContextRef.current?.jobTitle || 'Professional',
           company: companyName,
           tone: effectiveTone,
           mode: effectiveMode,
           targetKeywords: missingAtsKeywords,
+          resumeContext: resumeContextRef.current,
         });
         setVariations(fallbackList);
         setEditableVariations(fallbackList.map((v) => v.text));
@@ -180,6 +195,9 @@ export default function AiBulletModal({
 
   if (!isOpen) return null;
 
+  const contextSkillCount = resumeContext?.skills?.length || 0;
+  const contextExpCount = resumeContext?.experience?.length || 0;
+
   return (
     <div
       className="no-print fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/40 backdrop-blur-xs p-0 sm:p-4"
@@ -208,7 +226,7 @@ export default function AiBulletModal({
             <p className="text-xs text-slate-500 mt-0.5">
               Tailoring for{' '}
               <span className="font-medium text-slate-700">
-                {roleTitle || 'Your Role'}
+                {roleTitle || resumeContext?.jobTitle || 'Your Role'}
               </span>
               {companyName ? ` · ${companyName}` : ''}
             </p>
@@ -225,15 +243,27 @@ export default function AiBulletModal({
 
         {/* Body */}
         <div className="p-6 overflow-y-auto space-y-4 flex-1">
-          {/* Fact-Preservation Guardrail Strip */}
-          <div className="flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-xl bg-[#18B89A]/8 border border-[#18B89A]/25 text-xs text-slate-700">
+          {/* Fact-Preservation & Whole-Resume Context Strip */}
+          <div className="px-3.5 py-2.5 rounded-xl bg-[#18B89A]/8 border border-[#18B89A]/25 text-xs text-slate-700 space-y-1">
             <div className="flex items-center gap-2">
               <ShieldCheck className="w-4 h-4 text-[#18B89A] shrink-0" />
               <span>
-                <strong className="text-[#18181B]">Fact-Preserving AI:</strong>{' '}
-                Keeps your real facts intact and never invents experience, metrics, or achievements.
+                <strong className="text-[#18181B]">
+                  Substantial Fact-Safe Restructuring:
+                </strong>{' '}
+                Rebuilds clause order, outcome focus, and executive vocabulary
+                while keeping your real metrics and facts 100% accurate.
               </span>
             </div>
+            {(contextSkillCount > 0 || contextExpCount > 0) && (
+              <div className="flex items-center gap-1.5 text-[11px] text-slate-500 pl-6">
+                <Layers className="w-3 h-3 text-[#6D5CE8] shrink-0" />
+                <span>
+                  Whole-Resume Context Active: Aligned with {contextExpCount}{' '}
+                  roles and {contextSkillCount} skills from your resume
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Mode Toggle: Rewrite Bullet vs Improve Wording */}
@@ -243,7 +273,7 @@ export default function AiBulletModal({
               onClick={() => {
                 setActiveMode('rewrite_bullet');
                 setSelectedTone('impact');
-                handleGenerate('impact', draftText, 'rewrite_bullet');
+                void handleGenerate('impact', draftText, 'rewrite_bullet');
               }}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
                 activeMode === 'rewrite_bullet'
@@ -259,7 +289,7 @@ export default function AiBulletModal({
               onClick={() => {
                 setActiveMode('improve_wording');
                 setSelectedTone('clarity');
-                handleGenerate('clarity', draftText, 'improve_wording');
+                void handleGenerate('clarity', draftText, 'improve_wording');
               }}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
                 activeMode === 'improve_wording'
@@ -306,7 +336,7 @@ export default function AiBulletModal({
                   type="button"
                   onClick={() => {
                     setSelectedTone(tone.id);
-                    handleGenerate(tone.id);
+                    void handleGenerate(tone.id);
                   }}
                   className={`px-2.5 py-1.5 text-xs font-medium rounded-lg transition-all whitespace-nowrap shrink-0 cursor-pointer ${
                     selectedTone === tone.id
@@ -321,7 +351,7 @@ export default function AiBulletModal({
 
             <button
               type="button"
-              onClick={() => handleGenerate()}
+              onClick={() => void handleGenerate()}
               disabled={isLoading}
               className="min-h-[40px] px-4 py-2 text-xs font-semibold text-white bg-[#6D5CE8] hover:bg-[#5B4AD6] disabled:opacity-60 rounded-xl transition-all flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer"
             >
@@ -343,7 +373,7 @@ export default function AiBulletModal({
               </div>
               <button
                 type="button"
-                onClick={() => handleGenerate()}
+                onClick={() => void handleGenerate()}
                 className="px-2.5 py-1 rounded-lg bg-white border border-red-200 text-red-700 font-semibold hover:bg-red-100 transition-colors shrink-0 cursor-pointer"
               >
                 Retry
@@ -372,7 +402,7 @@ export default function AiBulletModal({
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <p className="text-xs font-semibold text-slate-700">
-                  Review & optionally edit a suggestion before applying:
+                  Review & optionally edit a restructured suggestion before applying:
                 </p>
                 <span className="text-[11px] text-slate-400">
                   Nothing changes until you click Apply
@@ -436,7 +466,7 @@ export default function AiBulletModal({
         {/* Footer */}
         <div className="px-6 py-3.5 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
           <span className="text-xs text-slate-500">
-            Powered by server-side Gemini · Your facts are preserved
+            Powered by server-side Gemini · Whole-resume context active
           </span>
           <button
             type="button"

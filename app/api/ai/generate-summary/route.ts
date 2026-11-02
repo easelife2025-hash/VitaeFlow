@@ -37,6 +37,8 @@ export async function POST(req: NextRequest) {
       education = [],
       skills = [],
       projects = [],
+      certifications = [],
+      jobDescriptionDraft = '',
     } = parsedBody;
 
     const expFacts = Array.isArray(experience)
@@ -85,6 +87,15 @@ export async function POST(req: NextRequest) {
           )
       : [];
 
+    const certFacts = Array.isArray(certifications)
+      ? certifications
+          .slice(0, 3)
+          .map((c: { name?: string; issuer?: string }) =>
+            cleanValidatedString(c?.name)
+          )
+          .filter(Boolean)
+      : [];
+
     if (
       !cleanValidatedString(jobTitle) &&
       !cleanValidatedString(currentSummary) &&
@@ -101,19 +112,22 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const prompt = `Generate 3 factual resume summaries based ONLY on these facts:
+    const prompt = `Synthesize the candidate's ENTIRE resume into 3 distinct, high-impact professional summaries based ONLY on these facts.
 ${FACT_PRESERVATION_RULES}
+CRITICAL RULE: Do not repeat the candidate's current draft verbatim. Substantially elevate the phrasing, synthesis, and executive clarity.
 Role: ${cleanValidatedString(jobTitle, 'Professional')}
 Draft: ${cleanValidatedString(currentSummary, 'None')}
 Experience: ${JSON.stringify(expFacts)}
 Skills: ${skillFacts.join(', ') || 'None'}
 Education: ${eduFacts.join('; ') || 'None'}
 Projects: ${projFacts.join('; ') || 'None'}
+Certifications: ${certFacts.join('; ') || 'None'}
+Target Job Context: ${cleanValidatedString(jobDescriptionDraft).slice(0, 600) || 'None'}
 
 Return 3 variations:
-1. "Executive Overview" (2-3 sentences)
-2. "Results & Core Strengths" (2-3 sentences)
-3. "Concise ATS Profile" (2 sentences)
+1. "Executive Overview" (2-3 sentences synthesizing role, companies, and flagship impact)
+2. "Results & Core Strengths" (2-3 sentences highlighting measurable achievements and technical/domain stack)
+3. "Concise ATS Profile" (2 crisp sentences optimized for rapid recruiter & ATS scanning)
 Include brief "groundedFactsUsed" for each.`;
 
     const { response, usage: finalUsage } = await generateContentWithModelFallback(

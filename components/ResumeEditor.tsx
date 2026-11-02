@@ -62,6 +62,7 @@ interface ResumeEditorProps {
     mode?: AiEnhancerMode;
     onApply: (newText: string) => void;
   }) => void;
+  onOpenFullResumePolish?: () => void;
   onGenerateResume?: () => void;
 }
 
@@ -100,6 +101,7 @@ export default function ResumeEditor({
   onUpdateAiUsage,
   onResetAiQuota,
   onOpenAiEnhancer,
+  onOpenFullResumePolish,
   onGenerateResume,
 }: ResumeEditorProps) {
   const [openSection, setOpenSection] = useState<EditorSection>(
@@ -224,6 +226,8 @@ export default function ResumeEditor({
           education: resume.education,
           skills: resume.skills,
           projects: resume.projects,
+          certifications: resume.certifications,
+          jobDescriptionDraft: resume.jobDescriptionDraft,
         }),
         signal: controller.signal,
       });
@@ -295,6 +299,8 @@ export default function ResumeEditor({
           experience: resume.experience,
           projects: resume.projects,
           education: resume.education,
+          certifications: resume.certifications,
+          jobDescriptionDraft: resume.jobDescriptionDraft,
           existingSkills: resume.skills,
         }),
         signal: controller.signal,
@@ -700,6 +706,17 @@ export default function ResumeEditor({
           >
             Reset
           </button>
+
+          {onOpenFullResumePolish && (
+            <button
+              type="button"
+              onClick={onOpenFullResumePolish}
+              className="min-h-[32px] px-3 py-1 rounded-xl bg-[#6D5CE8] hover:bg-[#5B4AD6] text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap shrink-0"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>AI Polish Whole Resume</span>
+            </button>
+          )}
         </div>
       </div>
 

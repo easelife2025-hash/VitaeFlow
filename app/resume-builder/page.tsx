@@ -13,6 +13,7 @@ import {
   Eye,
   CheckCircle2,
   FolderOpen,
+  Sparkles,
 } from 'lucide-react';
 import { useResume } from '@/context/ResumeContext';
 import ResumeEditor from '@/components/ResumeEditor';
@@ -52,6 +53,7 @@ function ResumeBuilderContent() {
     handleResetAiQuota,
     openDefaultAiEnhancer,
     openAiEnhancer,
+    openFullResumePolishModal,
     openImportModal,
     openDraftsModal,
   } = useResume();
@@ -163,6 +165,15 @@ function ResumeBuilderContent() {
 
             <button
               type="button"
+              onClick={openFullResumePolishModal}
+              className="min-h-[40px] px-3.5 py-2 rounded-xl bg-[#6D5CE8] hover:bg-[#5B4AD6] text-xs font-semibold text-white flex items-center gap-1.5 whitespace-nowrap cursor-pointer shadow-xs"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>AI Polish Whole Resume</span>
+            </button>
+
+            <button
+              type="button"
               onClick={openDefaultAiEnhancer}
               className="min-h-[40px] px-3.5 py-2 rounded-xl border border-[#6D5CE8]/30 bg-[#6D5CE8]/5 hover:bg-[#6D5CE8]/10 text-xs font-semibold text-[#6D5CE8] flex items-center gap-1.5 whitespace-nowrap cursor-pointer"
             >
@@ -234,6 +245,7 @@ function ResumeBuilderContent() {
               onUpdateAiUsage={(u) => setAiUsage(u)}
               onResetAiQuota={handleResetAiQuota}
               onOpenAiEnhancer={(cfg) => openAiEnhancer(cfg)}
+              onOpenFullResumePolish={openFullResumePolishModal}
               onGenerateResume={handleGenerateResume}
             />
           </div>

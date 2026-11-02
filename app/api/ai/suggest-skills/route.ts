@@ -36,6 +36,8 @@ export async function POST(req: NextRequest) {
       experience = [],
       projects = [],
       education = [],
+      certifications = [],
+      jobDescriptionDraft = '',
       existingSkills = [],
     } = parsedBody;
 
@@ -80,6 +82,13 @@ export async function POST(req: NextRequest) {
         )
       : [];
 
+    const certContext = Array.isArray(certifications)
+      ? certifications
+          .slice(0, 3)
+          .map((c: { name?: string }) => cleanValidatedString(c?.name))
+          .filter(Boolean)
+      : [];
+
     if (
       !cleanValidatedString(jobTitle) &&
       expContext.length === 0 &&
@@ -95,7 +104,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const prompt = `Suggest 8 relevant ATS skills aligned with this candidate's resume facts.
+    const prompt = `Analyze this candidate's ENTIRE resume and suggest 8 high-signal ATS skills evidenced by their experience, projects, education, certifications, and target role.
 ${FACT_PRESERVATION_RULES}
 Exclude existing skills: ${currentSkillsList.join(', ') || 'None'}
 Categories: "Core Technical", "Domain & Tools", "Transferable & Process"
@@ -103,7 +112,9 @@ Role: ${cleanValidatedString(jobTitle, 'Professional')}
 Summary: ${cleanValidatedString(summary)}
 Experience: ${JSON.stringify(expContext)}
 Projects: ${JSON.stringify(projContext)}
-Education: ${eduContext.join('; ')}`;
+Education: ${eduContext.join('; ')}
+Certifications: ${certContext.join('; ')}
+Target Job Context: ${cleanValidatedString(jobDescriptionDraft).slice(0, 600) || 'None'}`;
 
     const { response, usage: finalUsage } = await generateContentWithModelFallback(
       req,
