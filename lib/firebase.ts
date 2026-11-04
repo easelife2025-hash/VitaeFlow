@@ -22,11 +22,30 @@ import {
   resolveResumeColors,
 } from '@/lib/types';
 
-// Initialize Firebase App singleton
-const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+const resolvedFirebaseConfig = {
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || firebaseConfig.apiKey,
+  authDomain:
+    process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || firebaseConfig.authDomain,
+  projectId:
+    process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || firebaseConfig.projectId,
+  storageBucket:
+    process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET ||
+    firebaseConfig.storageBucket,
+  messagingSenderId:
+    process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID ||
+    firebaseConfig.messagingSenderId,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || firebaseConfig.appId,
+  firestoreDatabaseId:
+    process.env.NEXT_PUBLIC_FIREBASE_DATABASE_ID ||
+    firebaseConfig.firestoreDatabaseId,
+};
 
-// CRITICAL: Pass firestoreDatabaseId from firebase-applet-config.json
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+// Initialize Firebase App singleton
+const app =
+  getApps().length > 0 ? getApp() : initializeApp(resolvedFirebaseConfig);
+
+// CRITICAL: Pass firestoreDatabaseId from resolved config
+export const db = getFirestore(app, resolvedFirebaseConfig.firestoreDatabaseId);
 export const auth = getAuth(app);
 
 // Keep users logged in across browser restarts (Persistent Login)
@@ -39,12 +58,14 @@ if (typeof window !== 'undefined') {
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: 'select_account' });
 
-export const FIREBASE_PROJECT_ID = firebaseConfig.projectId;
-export const FIRESTORE_DATABASE_ID = firebaseConfig.firestoreDatabaseId;
-export const FIREBASE_QUOTA_UPGRADE_URL = `https://console.firebase.google.com/project/${firebaseConfig.projectId}/firestore/databases/${firebaseConfig.firestoreDatabaseId}/data?openUpgradeDialog=true`;
+export const FIREBASE_PROJECT_ID = resolvedFirebaseConfig.projectId;
+export const FIRESTORE_DATABASE_ID = resolvedFirebaseConfig.firestoreDatabaseId;
+export const FIREBASE_QUOTA_UPGRADE_URL = `https://console.firebase.google.com/project/${resolvedFirebaseConfig.projectId}/firestore/databases/${resolvedFirebaseConfig.firestoreDatabaseId}/data?openUpgradeDialog=true`;
 export const FIREBASE_PRICING_URL =
   'https://firebase.google.com/pricing#cloud-firestore';
-export const FIREBASE_AUTH_PROVIDERS_CONSOLE_URL = `https://console.firebase.google.com/project/${firebaseConfig.projectId}/authentication/providers`;
+export const FIREBASE_AUTH_PROVIDERS_CONSOLE_URL = `https://console.firebase.google.com/project/${resolvedFirebaseConfig.projectId}/authentication/providers`;
+export const FIREBASE_AUTH_SETTINGS_CONSOLE_URL = `https://console.firebase.google.com/project/${resolvedFirebaseConfig.projectId}/authentication/settings`;
+export const FIREBASE_AUTHORIZED_CONTINUE_URL = `https://${resolvedFirebaseConfig.authDomain}`;
 
 /**
  * Validates and sanitizes internal redirect paths to prevent open-redirect vulnerabilities

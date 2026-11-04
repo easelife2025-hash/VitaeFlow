@@ -2,7 +2,10 @@ import crypto from 'crypto';
 import { NextRequest } from 'next/server';
 import firebaseConfig from '../firebase-applet-config.json';
 
-const FIREBASE_PROJECT_ID = firebaseConfig.projectId || 'vitaeflow-ada2d';
+const FIREBASE_PROJECT_ID =
+  process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ||
+  firebaseConfig.projectId ||
+  'vitaeflow-ada2d';
 const EXPECTED_ISSUER = `https://securetoken.google.com/${FIREBASE_PROJECT_ID}`;
 const GOOGLE_CERTS_URL =
   'https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com';

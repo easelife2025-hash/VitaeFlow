@@ -18,8 +18,8 @@ import {
   Menu,
   BookOpen,
   LogIn,
-  Cloud,
   LogOut,
+  User as UserIcon,
 } from 'lucide-react';
 import { useResume } from '@/context/ResumeContext';
 import { evaluateResumeDeterministically } from '@/lib/ats-deterministic';
@@ -44,7 +44,6 @@ export default function Header() {
     handleExportPdf,
     setIsMobileDrawerOpen,
     user,
-    openAuthModal,
     handleSignOut,
   } = useResume();
 
@@ -62,6 +61,15 @@ export default function Header() {
   const displayedScore =
     activeResume.atsAnalysis?.score ?? deterministic.estimatedQualityScore;
 
+  const userName =
+    user?.displayName?.trim() ||
+    activeResume.personalInfo.fullName?.trim() ||
+    (user?.email ? user.email.split('@')[0] : '') ||
+    'Account';
+
+  const userEmail =
+    user?.email?.trim() || activeResume.personalInfo.email?.trim() || '';
+
   const handleBackNavigation = () => {
     if (typeof window !== 'undefined' && window.history.length > 1) {
       router.back();
@@ -74,16 +82,16 @@ export default function Header() {
 
   return (
     <header className="no-print sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200/90">
-      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-3">
+      <div className="max-w-[1600px] mx-auto px-3 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2 sm:gap-3">
         {/* Zone 1: Menu Trigger, Back Button (on internal pages), Brand Wordmark */}
-        <div className="flex items-center gap-2.5 min-w-0">
+        <div className="flex items-center gap-1.5 sm:gap-2.5 min-w-0">
           {/* Mobile / Tablet Slide-Out Menu Button */}
           <button
             type="button"
             onClick={() => setIsMobileDrawerOpen(true)}
             aria-label="Open side navigation menu"
             title="Open navigation menu"
-            className="lg:hidden min-h-[38px] min-w-[38px] px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white hover:border-[#6D5CE8]/40 text-slate-700 hover:text-[#6D5CE8] flex items-center justify-center transition-all cursor-pointer shrink-0"
+            className="lg:hidden min-h-[40px] min-w-[40px] px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white hover:border-[#6D5CE8]/40 text-slate-700 hover:text-[#6D5CE8] flex items-center justify-center transition-all cursor-pointer shrink-0"
           >
             <Menu className="w-4 h-4" />
           </button>
@@ -94,26 +102,26 @@ export default function Header() {
               type="button"
               onClick={handleBackNavigation}
               title="Go back to previous page"
-              className="min-h-[38px] px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:border-[#6D5CE8]/50 hover:bg-slate-50 text-xs font-semibold text-[#18181B] flex items-center gap-1.5 transition-all cursor-pointer shrink-0"
+              className="min-h-[38px] px-2.5 sm:px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:border-[#6D5CE8]/50 hover:bg-slate-50 text-xs font-semibold text-[#18181B] flex items-center gap-1 transition-all cursor-pointer shrink-0"
             >
               <ArrowLeft className="w-3.5 h-3.5 text-[#6D5CE8] shrink-0" />
-              <span>Back</span>
+              <span className="hidden sm:inline">Back</span>
             </button>
           )}
 
           <Link
             href="/"
-            className="font-display text-lg font-extrabold tracking-tight text-[#18181B] flex items-center gap-2 whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6D5CE8] rounded-lg"
+            className="font-display text-base sm:text-lg font-extrabold tracking-tight text-[#18181B] flex items-center gap-1.5 sm:gap-2 whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6D5CE8] rounded-lg"
           >
-            <span className="w-7 h-7 rounded-lg bg-[#6D5CE8] text-white flex items-center justify-center shadow-xs shadow-[#6D5CE8]/25">
+            <span className="w-7 h-7 rounded-lg bg-[#6D5CE8] text-white flex items-center justify-center shadow-xs shadow-[#6D5CE8]/25 shrink-0">
               <Sparkles className="w-3.5 h-3.5" />
             </span>
-            <span className="hidden xs:inline sm:inline">
+            <span>
               Vitae<span className="text-[#6D5CE8]">Flow</span>
             </span>
           </Link>
 
-          {!isLandingPage && (
+          {!isLandingPage && pathname !== '/login' && (
             <button
               type="button"
               onClick={openDraftsModal}
@@ -160,18 +168,27 @@ export default function Header() {
         )}
 
         {/* Zone 3: Context-Aware Right Actions + Firebase Auth Control */}
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 min-w-0">
           {user ? (
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 min-w-0">
               <Link
                 href="/settings"
-                title={`Signed in as ${user.email || user.displayName}`}
-                className="min-h-[38px] px-3 py-1.5 rounded-xl border border-[#18B89A]/40 bg-[#18B89A]/10 hover:bg-[#18B89A]/15 text-xs font-semibold text-[#18181B] flex items-center gap-1.5 whitespace-nowrap"
+                title={`${userName}${userEmail ? ` (${userEmail})` : ''}`}
+                className="min-h-[38px] px-2.5 sm:px-3 py-1 rounded-xl border border-[#18B89A]/40 bg-[#18B89A]/10 hover:bg-[#18B89A]/15 text-left flex items-center gap-2 max-w-[165px] sm:max-w-[230px] transition-colors"
               >
-                <Cloud className="w-3.5 h-3.5 text-[#18B89A] shrink-0" />
-                <span className="hidden md:inline max-w-[120px] truncate">
-                  {user.displayName || user.email?.split('@')[0] || 'Cloud Synced'}
-                </span>
+                <div className="w-6 h-6 rounded-full bg-[#6D5CE8] text-white text-[10px] font-bold flex items-center justify-center shrink-0">
+                  <UserIcon className="w-3.5 h-3.5" />
+                </div>
+                <div className="min-w-0 leading-tight">
+                  <span className="block text-[11px] font-bold text-[#18181B] truncate">
+                    {userName}
+                  </span>
+                  {userEmail && (
+                    <span className="block text-[10px] text-slate-600 truncate">
+                      {userEmail}
+                    </span>
+                  )}
+                </div>
               </Link>
               <button
                 type="button"
@@ -180,34 +197,34 @@ export default function Header() {
                   router.push('/');
                 }}
                 title="Log out of your account"
-                className="min-h-[38px] px-2.5 py-1.5 rounded-xl border border-slate-200 hover:border-slate-300 bg-white text-xs font-semibold text-slate-600 hover:text-[#18181B] flex items-center gap-1 cursor-pointer"
+                className="hidden sm:inline-flex min-h-[38px] px-2.5 py-1.5 rounded-xl border border-slate-200 hover:border-slate-300 bg-white text-xs font-semibold text-slate-600 hover:text-[#18181B] items-center gap-1 cursor-pointer shrink-0"
               >
                 <LogOut className="w-3.5 h-3.5" />
                 <span className="hidden lg:inline">Log Out</span>
               </button>
             </div>
-          ) : (
+          ) : pathname !== '/login' ? (
             <Link
               href={
                 pathname && pathname !== '/' && pathname !== '/login'
                   ? `/login?redirect=${encodeURIComponent(pathname)}`
                   : '/login'
               }
-              className="min-h-[38px] px-3 py-1.5 rounded-xl border border-[#6D5CE8]/35 bg-[#6D5CE8]/[0.06] hover:bg-[#6D5CE8]/15 text-xs font-semibold text-[#6D5CE8] flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+              className="min-h-[38px] px-2.5 sm:px-3 py-1.5 rounded-xl border border-[#6D5CE8]/35 bg-[#6D5CE8]/[0.06] hover:bg-[#6D5CE8]/15 text-xs font-semibold text-[#6D5CE8] flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
             >
               <LogIn className="w-3.5 h-3.5 shrink-0" />
-              <span>Sign In / Sign Up</span>
+              <span>Sign In</span>
             </Link>
-          )}
+          ) : null}
 
-          {!isLandingPage && (
+          {!isLandingPage && pathname !== '/login' && user && (
             <button
               type="button"
               onClick={openDraftsModal}
-              className="xl:hidden min-h-[38px] px-3 py-1.5 rounded-xl border border-slate-200 hover:border-slate-300 bg-white text-xs font-semibold text-slate-700 flex items-center gap-1.5 cursor-pointer"
+              className="hidden md:inline-flex xl:hidden min-h-[38px] px-3 py-1.5 rounded-xl border border-slate-200 hover:border-slate-300 bg-white text-xs font-semibold text-slate-700 items-center gap-1.5 cursor-pointer"
             >
               <FolderOpen className="w-3.5 h-3.5 text-[#6D5CE8]" />
-              <span className="hidden sm:inline">Resumes</span>
+              <span>Resumes</span>
               <span className="font-mono tabular-nums text-[11px] text-slate-500">
                 ({drafts.length})
               </span>
@@ -225,25 +242,25 @@ export default function Header() {
               </Link>
               <Link
                 href="/resume-builder"
-                className="min-h-[40px] px-4 py-2 text-xs sm:text-sm font-semibold text-white bg-[#6D5CE8] rounded-xl hover:bg-[#5B4AD6] active:scale-[0.98] transition-all shadow-sm shadow-[#6D5CE8]/25 flex items-center gap-1.5 whitespace-nowrap shrink-0"
+                className="min-h-[40px] px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold text-white bg-[#6D5CE8] rounded-xl hover:bg-[#5B4AD6] active:scale-[0.98] transition-all shadow-sm shadow-[#6D5CE8]/25 flex items-center gap-1.5 whitespace-nowrap shrink-0"
               >
                 <span>Build My Resume</span>
                 <ArrowRight className="w-3.5 h-3.5 shrink-0" />
               </Link>
             </>
-          ) : (
+          ) : pathname !== '/login' && user ? (
             <button
               type="button"
               onClick={() => handleExportPdf()}
-              className="min-h-[40px] px-4 py-2 text-xs sm:text-sm font-semibold text-white bg-[#6D5CE8] rounded-xl hover:bg-[#5B4AD6] active:scale-[0.98] transition-all shadow-sm shadow-[#6D5CE8]/20 flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer"
+              className="min-h-[38px] sm:min-h-[40px] px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold text-white bg-[#6D5CE8] rounded-xl hover:bg-[#5B4AD6] active:scale-[0.98] transition-all shadow-sm shadow-[#6D5CE8]/20 flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer"
             >
-              <Printer className="w-4 h-4 shrink-0" />
-              <span>Download PDF</span>
+              <Printer className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+              <span className="hidden sm:inline">Download PDF</span>
+              <span className="sm:hidden">PDF</span>
             </button>
-          )}
+          ) : null}
         </div>
       </div>
     </header>
   );
 }
-

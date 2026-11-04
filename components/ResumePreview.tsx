@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useRef, useEffect } from 'react';
 import {
   Mail,
   Phone,
@@ -51,6 +51,42 @@ export default function ResumePreview({
 }: ResumePreviewProps) {
   const [zoom, setZoom] = useState<number>(100);
   const [showStyleDrawer, setShowStyleDrawer] = useState<boolean>(false);
+  const previewViewportRef = useRef<HTMLDivElement | null>(null);
+  const sheetRef = useRef<HTMLDivElement | null>(null);
+  const [containerWidth, setContainerWidth] = useState<number>(794);
+  const [sheetHeight, setSheetHeight] = useState<number>(1122);
+
+  useEffect(() => {
+    const viewportEl = previewViewportRef.current;
+    const sheetEl = sheetRef.current;
+    if (!viewportEl) return;
+
+    const updateDimensions = () => {
+      if (viewportEl) {
+        const w = viewportEl.clientWidth;
+        if (w > 0) setContainerWidth(w);
+      }
+      if (sheetEl) {
+        const h = sheetEl.offsetHeight;
+        if (h > 0) setSheetHeight(Math.max(1122, h));
+      }
+    };
+
+    updateDimensions();
+
+    if (typeof ResizeObserver !== 'undefined') {
+      const ro = new ResizeObserver(() => updateDimensions());
+      ro.observe(viewportEl);
+      if (sheetEl) ro.observe(sheetEl);
+      return () => ro.disconnect();
+    }
+  }, [resume, resume.templateId]);
+
+  const autoFitScale =
+    containerWidth > 0 && containerWidth < 794
+      ? Math.max(0.34, containerWidth / 794)
+      : 1;
+  const effectiveScale = Number(((zoom / 100) * autoFitScale).toFixed(4));
 
   const {
     personalInfo,
@@ -448,19 +484,38 @@ export default function ResumePreview({
         )}
       </div>
 
-      {/* Live A4 Sheet Container (794px x 1122px standard A4 aspect ratio, expands cleanly for multi-page) */}
-      <div className="flex-1 overflow-auto pb-8">
+      {/* Live A4 Sheet Container (794px x 1122px standard A4 aspect ratio, auto-scales on mobile screens) */}
+      <div
+        ref={previewViewportRef}
+        className="flex-1 w-full overflow-x-hidden overflow-y-auto pb-8 flex justify-center"
+      >
         <div
-          id="resume-print-area"
-          className="print-only-container bg-white border border-slate-200 rounded-xl shadow-md mx-auto transition-all duration-150 origin-top overflow-hidden flex flex-col relative"
           style={{
-            maxWidth: '794px',
-            minHeight: '1122px',
-            fontFamily: selectedFontObj.cssFamily,
-            transform: zoom !== 100 ? `scale(${zoom / 100})` : undefined,
-            transformOrigin: 'top center',
+            width:
+              effectiveScale !== 1
+                ? `${Math.round(794 * effectiveScale)}px`
+                : '794px',
+            height:
+              effectiveScale !== 1
+                ? `${Math.round(sheetHeight * effectiveScale)}px`
+                : undefined,
+            maxWidth: '100%',
           }}
+          className="relative mx-auto transition-all duration-150"
         >
+          <div
+            ref={sheetRef}
+            id="resume-print-area"
+            className="print-only-container bg-white border border-slate-200 rounded-xl shadow-md transition-all duration-150 origin-top-left overflow-hidden flex flex-col relative"
+            style={{
+              width: '794px',
+              minHeight: '1122px',
+              fontFamily: selectedFontObj.cssFamily,
+              transform:
+                effectiveScale !== 1 ? `scale(${effectiveScale})` : undefined,
+              transformOrigin: 'top left',
+            }}
+          >
           {/* Subtle Multi-Page A4 Break Guide at 1122px (Hidden in print) */}
           <div
             aria-hidden="true"
@@ -2464,6 +2519,7 @@ export default function ResumePreview({
               </div>
             </div>
           )}
+          </div>
         </div>
       </div>
     </div>

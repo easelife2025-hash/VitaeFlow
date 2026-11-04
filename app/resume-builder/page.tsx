@@ -77,8 +77,8 @@ function ResumeBuilderContent() {
   };
 
   return (
-    <main className="flex-1 bg-[#F8FAFC] py-6 sm:py-8 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-[1440px] mx-auto space-y-6">
+    <main className="flex-1 min-w-0 bg-[#F8FAFC] pt-4 pb-24 sm:py-8 lg:pb-8 px-3 sm:px-6 lg:px-8">
+      <div className="max-w-[1440px] mx-auto space-y-4 sm:space-y-6">
         {isGeneratedNotice && (
           <div className="bg-[#6D5CE8] text-white rounded-2xl p-4 sm:px-6 shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
@@ -112,9 +112,9 @@ function ResumeBuilderContent() {
         )}
 
         {/* Studio Header Strip */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col xl:flex-row xl:items-center justify-between gap-4">
-          <div className="space-y-1">
-            <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-slate-500">
+        <div className="bg-white border border-slate-200 rounded-2xl p-3.5 sm:p-5 shadow-xs flex flex-col xl:flex-row xl:items-center justify-between gap-3 sm:gap-4">
+          <div className="space-y-1 min-w-0">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] sm:text-xs text-slate-500">
               <span className="font-bold uppercase tracking-wider text-[#6D5CE8] flex items-center gap-1.5">
                 <FileEdit className="w-3.5 h-3.5" />
                 <span>AI Resume Builder Studio</span>
@@ -122,68 +122,70 @@ function ResumeBuilderContent() {
               <span aria-hidden="true">·</span>
               <span className="inline-flex items-center gap-1 text-[#18B89A] font-medium">
                 <CheckCircle2 className="w-3.5 h-3.5" />
-                Auto-saved to browser
+                Auto-saved
               </span>
-              <span aria-hidden="true">·</span>
-              <span className="font-mono tabular-nums text-slate-600">
+              <span aria-hidden="true" className="hidden sm:inline">
+                ·
+              </span>
+              <span className="hidden sm:inline font-mono tabular-nums text-slate-600">
                 {aiUsage.activeModelLabel || 'Gemini 3.8 Flash'} ({aiUsage.used}/{aiUsage.limit} · Auto-Switch On)
               </span>
             </div>
-            <h1 className="font-display text-lg sm:text-2xl font-bold tracking-tight text-[#18181B]">
+            <h1 className="font-display text-base sm:text-2xl font-bold tracking-tight text-[#18181B] truncate">
               {activeResume.title}
             </h1>
           </div>
 
-          {/* Action Toolbar */}
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={openDraftsModal}
-              className="min-h-[40px] px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:border-slate-300 text-xs font-semibold text-slate-700 flex items-center gap-1.5 whitespace-nowrap cursor-pointer"
-            >
-              <FolderOpen className="w-3.5 h-3.5 text-[#6D5CE8]" />
-              <span>Switch Draft ({drafts.length})</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleCreateBlankDraft()}
-              className="min-h-[40px] px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:border-[#6D5CE8] text-xs font-semibold text-[#18181B] flex items-center gap-1.5 whitespace-nowrap cursor-pointer"
-            >
-              <Plus className="w-3.5 h-3.5 text-[#6D5CE8]" />
-              <span>New Resume</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={openImportModal}
-              className="min-h-[40px] px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:border-[#18B89A] text-xs font-semibold text-[#18181B] flex items-center gap-1.5 whitespace-nowrap cursor-pointer"
-            >
-              <Upload className="w-3.5 h-3.5 text-[#18B89A]" />
-              <span>Import Resume</span>
-            </button>
-
+          {/* Action Toolbar — Horizontal Swipe on Mobile, Wrap on Desktop */}
+          <div className="flex items-center gap-2 overflow-x-auto sm:flex-wrap pb-1 sm:pb-0 -mx-1 px-1">
             <button
               type="button"
               onClick={openFullResumePolishModal}
-              className="min-h-[40px] px-3.5 py-2 rounded-xl bg-[#6D5CE8] hover:bg-[#5B4AD6] text-xs font-semibold text-white flex items-center gap-1.5 whitespace-nowrap cursor-pointer shadow-xs"
+              className="min-h-[38px] sm:min-h-[40px] px-3.5 py-2 rounded-xl bg-[#6D5CE8] hover:bg-[#5B4AD6] text-xs font-semibold text-white flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer shadow-xs"
             >
               <Sparkles className="w-3.5 h-3.5" />
-              <span>AI Polish Whole Resume</span>
+              <span>AI Polish Resume</span>
             </button>
 
             <button
               type="button"
               onClick={openDefaultAiEnhancer}
-              className="min-h-[40px] px-3.5 py-2 rounded-xl border border-[#6D5CE8]/30 bg-[#6D5CE8]/5 hover:bg-[#6D5CE8]/10 text-xs font-semibold text-[#6D5CE8] flex items-center gap-1.5 whitespace-nowrap cursor-pointer"
+              className="min-h-[38px] sm:min-h-[40px] px-3.5 py-2 rounded-xl border border-[#6D5CE8]/30 bg-[#6D5CE8]/5 hover:bg-[#6D5CE8]/10 text-xs font-semibold text-[#6D5CE8] flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer"
             >
               <Wand2 className="w-3.5 h-3.5" />
               <span>AI Bullet Rewriter</span>
             </button>
 
+            <button
+              type="button"
+              onClick={openDraftsModal}
+              className="min-h-[38px] sm:min-h-[40px] px-3 py-2 rounded-xl border border-slate-200 bg-white hover:border-slate-300 text-xs font-semibold text-slate-700 flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer"
+            >
+              <FolderOpen className="w-3.5 h-3.5 text-[#6D5CE8]" />
+              <span>Switch ({drafts.length})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleCreateBlankDraft()}
+              className="min-h-[38px] sm:min-h-[40px] px-3 py-2 rounded-xl border border-slate-200 bg-white hover:border-[#6D5CE8] text-xs font-semibold text-[#18181B] flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5 text-[#6D5CE8]" />
+              <span>New</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={openImportModal}
+              className="min-h-[38px] sm:min-h-[40px] px-3 py-2 rounded-xl border border-slate-200 bg-white hover:border-[#18B89A] text-xs font-semibold text-[#18181B] flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer"
+            >
+              <Upload className="w-3.5 h-3.5 text-[#18B89A]" />
+              <span>Import</span>
+            </button>
+
             <Link
               href="/ats-checker"
-              className="min-h-[40px] px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:border-[#18B89A] text-xs font-semibold text-slate-700 hover:text-[#18B89A] flex items-center gap-1.5 whitespace-nowrap"
+              className="min-h-[38px] sm:min-h-[40px] px-3 py-2 rounded-xl border border-slate-200 bg-white hover:border-[#18B89A] text-xs font-semibold text-slate-700 hover:text-[#18B89A] flex items-center gap-1.5 whitespace-nowrap shrink-0"
             >
               <ShieldCheck className="w-3.5 h-3.5 text-[#18B89A]" />
               <span>ATS Check</span>
@@ -191,7 +193,7 @@ function ResumeBuilderContent() {
 
             <Link
               href="/job-matcher"
-              className="min-h-[40px] px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:border-[#6D5CE8] text-xs font-semibold text-slate-700 hover:text-[#6D5CE8] flex items-center gap-1.5 whitespace-nowrap"
+              className="min-h-[38px] sm:min-h-[40px] px-3 py-2 rounded-xl border border-slate-200 bg-white hover:border-[#6D5CE8] text-xs font-semibold text-slate-700 hover:text-[#6D5CE8] flex items-center gap-1.5 whitespace-nowrap shrink-0"
             >
               <Target className="w-3.5 h-3.5 text-[#6D5CE8]" />
               <span>Job Matcher</span>
@@ -199,15 +201,15 @@ function ResumeBuilderContent() {
           </div>
         </div>
 
-        {/* Mobile View Switcher (Editor vs Live A4 Preview) */}
-        <div className="lg:hidden grid grid-cols-2 gap-2 p-1.5 bg-white border border-slate-200 rounded-2xl">
+        {/* Sticky Mobile View Switcher (Editor vs Live A4 Preview) */}
+        <div className="lg:hidden sticky top-[68px] z-30 grid grid-cols-2 gap-1.5 p-1.5 bg-white/95 backdrop-blur-md border border-slate-200 rounded-2xl shadow-md">
           <button
             type="button"
             onClick={() => setMobileView('editor')}
-            className={`min-h-[40px] rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer ${
+            className={`min-h-[42px] rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
               mobileView === 'editor'
-                ? 'bg-[#6D5CE8] text-white'
-                : 'text-slate-600'
+                ? 'bg-[#6D5CE8] text-white shadow-xs'
+                : 'text-slate-600 hover:text-[#18181B]'
             }`}
           >
             <FileEdit className="w-3.5 h-3.5" />
@@ -216,10 +218,10 @@ function ResumeBuilderContent() {
           <button
             type="button"
             onClick={() => setMobileView('preview')}
-            className={`min-h-[40px] rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer ${
+            className={`min-h-[42px] rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
               mobileView === 'preview'
-                ? 'bg-[#6D5CE8] text-white'
-                : 'text-slate-600'
+                ? 'bg-[#6D5CE8] text-white shadow-xs'
+                : 'text-slate-600 hover:text-[#18181B]'
             }`}
           >
             <Eye className="w-3.5 h-3.5" />

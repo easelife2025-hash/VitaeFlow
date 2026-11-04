@@ -21,6 +21,9 @@ import {
   RefreshCw,
   LogIn,
   UserPlus,
+  Copy,
+  Check,
+  Globe,
 } from 'lucide-react';
 import {
   auth,
@@ -28,6 +31,8 @@ import {
   validateEmailPasswordInput,
   FIREBASE_PROJECT_ID,
   FIREBASE_AUTH_PROVIDERS_CONSOLE_URL,
+  FIREBASE_AUTH_SETTINGS_CONSOLE_URL,
+  FIREBASE_AUTHORIZED_CONTINUE_URL,
 } from '@/lib/firebase';
 import { useResume } from '@/context/ResumeContext';
 
@@ -45,14 +50,37 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [needsProviderEnableHelp, setNeedsProviderEnableHelp] = useState(false);
+  const [unauthorizedDomainHost, setUnauthorizedDomainHost] = useState<
+    string | null
+  >(null);
+  const [copiedDomain, setCopiedDomain] = useState(false);
   const [infoMsg, setInfoMsg] = useState<string | null>(null);
 
   if (!isOpen) return null;
+
+  const getCurrentHostname = (): string => {
+    if (typeof window !== 'undefined' && window.location?.hostname) {
+      return window.location.hostname;
+    }
+    return 'vitae-flow-xi.vercel.app';
+  };
+
+  const handleCopyDomain = async () => {
+    const domain = unauthorizedDomainHost || getCurrentHostname();
+    try {
+      await navigator.clipboard.writeText(domain);
+      setCopiedDomain(true);
+      setTimeout(() => setCopiedDomain(false), 2500);
+    } catch {
+      // Ignore clipboard failure
+    }
+  };
 
   const handleGoogleSignIn = async () => {
     setErrorMsg(null);
     setInfoMsg(null);
     setNeedsProviderEnableHelp(false);
+    setUnauthorizedDomainHost(null);
     setLoading(true);
     try {
       await signInWithPopup(auth, googleProvider);
@@ -62,6 +90,15 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
       const message = err instanceof Error ? err.message : String(err);
       if (code === 'auth/popup-closed-by-user') {
         setErrorMsg('Google sign-in popup was closed before completing.');
+      } else if (
+        code === 'auth/unauthorized-domain' ||
+        message.includes('auth/unauthorized-domain')
+      ) {
+        const host = getCurrentHostname();
+        setUnauthorizedDomainHost(host);
+        setErrorMsg(
+          `Your deployment domain (${host}) needs to be added to Authorized Domains in Firebase Console for Google Popup Sign-In — or create your account right now using Email & Password below.`
+        );
       } else if (code === 'auth/operation-not-allowed') {
         setNeedsProviderEnableHelp(true);
         setErrorMsg(
@@ -80,6 +117,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
     setErrorMsg(null);
     setInfoMsg(null);
     setNeedsProviderEnableHelp(false);
+    setUnauthorizedDomainHost(null);
 
     if (tab === 'reset') {
       const check = validateEmailPasswordInput(email);
@@ -89,7 +127,13 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
       }
       setLoading(true);
       try {
-        await sendPasswordResetEmail(auth, email.trim());
+        try {
+          await sendPasswordResetEmail(auth, email.trim(), {
+            url: FIREBASE_AUTHORIZED_CONTINUE_URL,
+          });
+        } catch {
+          await sendPasswordResetEmail(auth, email.trim());
+        }
         setInfoMsg(
           'Password reset email sent! Check your inbox for instructions.'
         );
@@ -126,11 +170,15 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
             displayName: displayName.trim().slice(0, 120),
           });
         }
-        await sendEmailVerification(cred.user);
+        try {
+          await sendEmailVerification(cred.user, {
+            url: FIREBASE_AUTHORIZED_CONTINUE_URL,
+          });
+        } catch {
+          // Non-blocking verification email dispatch
+        }
         await handleRefreshAuthUser();
-        setInfoMsg(
-          'Account created! We sent a verification link to your email. Please verify your email so Firestore security rules allow cloud writes.'
-        );
+        onClose();
       } else {
         await signInWithEmailAndPassword(auth, email.trim(), password);
         onClose();
@@ -138,7 +186,16 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
     } catch (err: unknown) {
       const code = (err as { code?: string })?.code || '';
       const message = err instanceof Error ? err.message : String(err);
-      if (code === 'auth/operation-not-allowed') {
+      if (
+        code === 'auth/unauthorized-domain' ||
+        message.includes('auth/unauthorized-domain')
+      ) {
+        const host = getCurrentHostname();
+        setUnauthorizedDomainHost(host);
+        setErrorMsg(
+          `Domain (${host}) is not yet listed under Firebase Console → Authentication → Settings → Authorized domains.`
+        );
+      } else if (code === 'auth/operation-not-allowed') {
         setNeedsProviderEnableHelp(true);
         setErrorMsg(
           'Email/Password authentication is not enabled yet in your Firebase project.'
@@ -166,7 +223,9 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
     setLoading(true);
     setErrorMsg(null);
     try {
-      await sendEmailVerification(auth.currentUser);
+      await sendEmailVerification(auth.currentUser, {
+        url: FIREBASE_AUTHORIZED_CONTINUE_URL,
+      });
       setInfoMsg('Verification email sent! Check your inbox and spam folder.');
     } catch (err: unknown) {
       setErrorMsg(
@@ -185,7 +244,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
     try {
       await handleRefreshAuthUser();
       if (auth.currentUser?.emailVerified) {
-        setInfoMsg('Email verified! Cloud Firestore sync is now active.');
+        setInfoMsg('Email verified! Cloud Firestore sync is active.');
         setTimeout(() => onClose(), 900);
       } else {
         setErrorMsg(
@@ -237,15 +296,15 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
           </p>
         </div>
 
-        {/* If user is signed in but unverified */}
+        {/* If user is signed in */}
         {user && !user.emailVerified && (
           <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 space-y-3">
             <div className="flex items-start gap-2.5">
               <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
               <div className="text-xs text-amber-900 space-y-1">
-                <p className="font-bold">Verify Your Email to Unlock Cloud Writes</p>
+                <p className="font-bold">Optional Email Verification</p>
                 <p>
-                  Signed in as <strong>{user.email}</strong>. Strict Firestore Security Rules require a verified email (`email_verified == true`) before saving documents to the cloud.
+                  Signed in as <strong>{user.email}</strong>. Your cloud sync is active! You can also verify your email address below.
                 </p>
               </div>
             </div>
@@ -272,11 +331,53 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
         )}
 
         {errorMsg && (
-          <div className="p-3.5 rounded-2xl bg-red-50 border border-red-200 text-xs text-red-700 space-y-2">
+          <div className="p-3.5 rounded-2xl bg-red-50 border border-red-200 text-xs text-red-700 space-y-2.5">
             <div className="flex items-start gap-2">
               <AlertTriangle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
               <span>{errorMsg}</span>
             </div>
+
+            {unauthorizedDomainHost && (
+              <div className="pt-2 border-t border-red-200/80 space-y-2 text-[11px] text-slate-800 bg-white/90 p-2.5 rounded-xl border border-red-200/60">
+                <div className="flex items-center gap-1.5 font-bold text-[#18181B]">
+                  <Globe className="w-3.5 h-3.5 text-[#6D5CE8]" />
+                  <span>Authorize &ldquo;{unauthorizedDomainHost}&rdquo; in Firebase:</span>
+                </div>
+                <ol className="list-decimal list-inside space-y-0.5 text-slate-600">
+                  <li>Open <strong>Authentication &rarr; Settings &rarr; Authorized domains</strong>.</li>
+                  <li>Click <strong>Add domain</strong> and paste <strong>{unauthorizedDomainHost}</strong>.</li>
+                </ol>
+                <div className="flex flex-wrap items-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={handleCopyDomain}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-900 text-white font-semibold text-[11px] cursor-pointer"
+                  >
+                    {copiedDomain ? (
+                      <>
+                        <Check className="w-3 h-3 text-[#18B89A]" />
+                        <span>Copied</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3 h-3" />
+                        <span>Copy {unauthorizedDomainHost}</span>
+                      </>
+                    )}
+                  </button>
+                  <a
+                    href={FIREBASE_AUTH_SETTINGS_CONSOLE_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#6D5CE8] text-white font-semibold text-[11px]"
+                  >
+                    <span>Open Authorized Domains</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+              </div>
+            )}
+
             {needsProviderEnableHelp && (
               <div className="pt-2 border-t border-red-200/80 space-y-1.5 text-[11px] text-red-800">
                 <p className="font-bold">
@@ -325,7 +426,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
                 <span className="text-[#34A853]">l</span>
                 <span className="text-[#EA4335]">e</span>
               </span>
-              <span>Continue with Google (Instant Verified)</span>
+              <span>Continue with Google</span>
             </button>
 
             <div className="relative flex py-1 items-center">
@@ -456,7 +557,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
                   : tab === 'signin'
                     ? 'Sign In with Email'
                     : tab === 'signup'
-                      ? 'Create Account & Send Verification'
+                      ? 'Create Account & Continue'
                       : 'Send Password Reset Email'}
               </button>
             </form>

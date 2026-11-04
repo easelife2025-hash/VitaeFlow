@@ -197,10 +197,10 @@ export default function JobMatcherPage() {
   };
 
   return (
-    <main className="flex-1 bg-[#F8FAFC] py-6 sm:py-8 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-[1440px] mx-auto space-y-6">
+    <main className="flex-1 min-w-0 bg-[#F8FAFC] pt-5 pb-24 sm:py-8 lg:pb-8 px-3 sm:px-6 lg:px-8">
+      <div className="max-w-[1440px] mx-auto space-y-5 sm:space-y-6">
         {/* Page Header Strip */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="space-y-1">
             <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
               <span className="font-bold uppercase tracking-wider text-[#6D5CE8] flex items-center gap-1.5">

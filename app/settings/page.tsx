@@ -142,10 +142,10 @@ export default function SettingsPage() {
   };
 
   return (
-    <main className="flex-1 bg-[#F8FAFC] py-8 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-5xl mx-auto space-y-6">
+    <main className="flex-1 min-w-0 bg-[#F8FAFC] pt-5 pb-24 sm:py-8 lg:pb-8 px-3 sm:px-6 lg:px-8">
+      <div className="max-w-5xl mx-auto space-y-5 sm:space-y-6">
         {/* Page Header */}
-        <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-7 shadow-xs space-y-1.5">
+        <div className="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl p-4 sm:p-7 shadow-xs space-y-1.5">
           <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#6D5CE8]">
             <Settings className="w-4 h-4" />
             <span>Workspace Configuration, Cloud Sync &amp; Privacy</span>

@@ -48,11 +48,11 @@ export default function DashboardPage() {
   }, [drafts]);
 
   return (
-    <main className="flex-1 bg-[#F8FAFC] py-8 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-[1440px] mx-auto space-y-6">
+    <main className="flex-1 min-w-0 bg-[#F8FAFC] pt-5 pb-24 sm:py-8 lg:pb-8 px-3 sm:px-6 lg:px-8">
+      <div className="max-w-[1440px] mx-auto space-y-5 sm:space-y-6">
         {/* Page Header Banner */}
-        <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-7 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-          <div className="space-y-1.5">
+        <div className="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl p-4 sm:p-7 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-4 sm:gap-6">
+          <div className="space-y-1.5 min-w-0">
             <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
               <span className="font-bold uppercase tracking-wider text-[#6D5CE8] flex items-center gap-1.5">
                 <LayoutGrid className="w-3.5 h-3.5" />
@@ -61,10 +61,10 @@ export default function DashboardPage() {
               <span aria-hidden="true">·</span>
               <span className="inline-flex items-center gap-1 text-[#18B89A] font-medium">
                 <CheckCircle2 className="w-3.5 h-3.5" />
-                Auto-saved locally in browser
+                Auto-saved
               </span>
             </div>
-            <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-[#18181B]">
+            <h1 className="font-display text-xl sm:text-3xl font-bold tracking-tight text-[#18181B]">
               Dashboard & Saved Resumes
             </h1>
             <p className="text-xs sm:text-sm text-slate-600">
@@ -73,28 +73,28 @@ export default function DashboardPage() {
           </div>
 
           {/* Overview Telemetry Pills */}
-          <div className="grid grid-cols-3 gap-3 shrink-0">
-            <div className="px-4 py-3 rounded-2xl bg-[#F8FAFC] border border-slate-200/80">
-              <span className="block text-[11px] text-slate-500">
-                Total Resumes
+          <div className="grid grid-cols-3 gap-2 sm:gap-3 shrink-0">
+            <div className="px-2.5 sm:px-4 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl bg-[#F8FAFC] border border-slate-200/80">
+              <span className="block text-[10px] sm:text-[11px] text-slate-500 truncate">
+                Resumes
               </span>
-              <span className="font-mono tabular-nums text-lg font-bold text-[#18181B]">
+              <span className="font-mono tabular-nums text-base sm:text-lg font-bold text-[#18181B]">
                 {drafts.length}
               </span>
             </div>
-            <div className="px-4 py-3 rounded-2xl bg-[#F8FAFC] border border-slate-200/80">
-              <span className="block text-[11px] text-slate-500">
-                Avg. ATS Quality
+            <div className="px-2.5 sm:px-4 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl bg-[#F8FAFC] border border-slate-200/80">
+              <span className="block text-[10px] sm:text-[11px] text-slate-500 truncate">
+                ATS Quality
               </span>
-              <span className="font-mono tabular-nums text-lg font-bold text-[#18B89A]">
+              <span className="font-mono tabular-nums text-base sm:text-lg font-bold text-[#18B89A]">
                 {avgQuality}%
               </span>
             </div>
-            <div className="px-4 py-3 rounded-2xl bg-[#F8FAFC] border border-slate-200/80">
-              <span className="block text-[11px] text-slate-500">
-                AI Quota Left
+            <div className="px-2.5 sm:px-4 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl bg-[#F8FAFC] border border-slate-200/80">
+              <span className="block text-[10px] sm:text-[11px] text-slate-500 truncate">
+                AI Quota
               </span>
-              <span className="font-mono tabular-nums text-lg font-bold text-[#6D5CE8]">
+              <span className="font-mono tabular-nums text-base sm:text-lg font-bold text-[#6D5CE8]">
                 {aiUsage.remaining}/{aiUsage.limit}
               </span>
             </div>
@@ -102,7 +102,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Quick Route Launcher Cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3">
           <Link
             href="/resume-builder"
             className="p-4 rounded-2xl bg-white border border-slate-200 hover:border-[#6D5CE8] shadow-2xs transition-all flex items-center justify-between group"

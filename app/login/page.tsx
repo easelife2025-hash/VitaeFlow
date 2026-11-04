@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   updateProfile,
@@ -25,6 +27,9 @@ import {
   Sparkles,
   FileEdit,
   Target,
+  Copy,
+  Check,
+  Globe,
 } from 'lucide-react';
 import {
   auth,
@@ -33,6 +38,8 @@ import {
   sanitizeRedirectPath,
   FIREBASE_PROJECT_ID,
   FIREBASE_AUTH_PROVIDERS_CONSOLE_URL,
+  FIREBASE_AUTH_SETTINGS_CONSOLE_URL,
+  FIREBASE_AUTHORIZED_CONTINUE_URL,
 } from '@/lib/firebase';
 import { useResume } from '@/context/ResumeContext';
 
@@ -65,6 +72,10 @@ function LoginContent() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [infoMsg, setInfoMsg] = useState<string | null>(null);
   const [needsProviderEnableHelp, setNeedsProviderEnableHelp] = useState(false);
+  const [unauthorizedDomainHost, setUnauthorizedDomainHost] = useState<
+    string | null
+  >(null);
+  const [copiedDomain, setCopiedDomain] = useState(false);
   const [cooldownSeconds, setCooldownSeconds] = useState(0);
 
   // Redirect authenticated users immediately to the feature they originally selected
@@ -74,6 +85,19 @@ function LoginContent() {
     }
   }, [isAuthReady, user, redirectPath, router]);
 
+  // Complete any pending OAuth redirect flow
+  useEffect(() => {
+    getRedirectResult(auth)
+      .then((result) => {
+        if (result?.user) {
+          router.replace(redirectPath);
+        }
+      })
+      .catch(() => {
+        // Ignore if no redirect was initiated
+      });
+  }, [redirectPath, router]);
+
   // Countdown timer for login rate-limiting lockout
   useEffect(() => {
     if (cooldownSeconds <= 0) return;
@@ -82,6 +106,24 @@ function LoginContent() {
     }, 1000);
     return () => clearInterval(timer);
   }, [cooldownSeconds]);
+
+  const getCurrentHostname = (): string => {
+    if (typeof window !== 'undefined' && window.location?.hostname) {
+      return window.location.hostname;
+    }
+    return 'vitae-flow-xi.vercel.app';
+  };
+
+  const handleCopyDomain = async () => {
+    const domain = unauthorizedDomainHost || getCurrentHostname();
+    try {
+      await navigator.clipboard.writeText(domain);
+      setCopiedDomain(true);
+      setTimeout(() => setCopiedDomain(false), 2500);
+    } catch {
+      // Ignore clipboard failure
+    }
+  };
 
   const checkServerAuthRateLimit = async (
     targetEmail: string
@@ -137,6 +179,7 @@ function LoginContent() {
     setErrorMsg(null);
     setInfoMsg(null);
     setNeedsProviderEnableHelp(false);
+    setUnauthorizedDomainHost(null);
 
     const allowed = await checkServerAuthRateLimit('google-oauth');
     if (!allowed) return;
@@ -149,8 +192,27 @@ function LoginContent() {
     } catch (err: unknown) {
       const code = (err as { code?: string })?.code || '';
       const message = err instanceof Error ? err.message : String(err);
+
+      if (code === 'auth/popup-blocked') {
+        try {
+          await signInWithRedirect(auth, googleProvider);
+          return;
+        } catch {
+          // Fall through to error handling
+        }
+      }
+
       if (code === 'auth/popup-closed-by-user') {
         setErrorMsg('Google sign-in popup was closed before completing.');
+      } else if (
+        code === 'auth/unauthorized-domain' ||
+        message.includes('auth/unauthorized-domain')
+      ) {
+        const host = getCurrentHostname();
+        setUnauthorizedDomainHost(host);
+        setErrorMsg(
+          `Your deployment domain (${host}) needs to be added to Authorized Domains in Firebase Console for Google Popup Sign-In — or create your account right now using Email & Password below.`
+        );
       } else if (code === 'auth/operation-not-allowed') {
         setNeedsProviderEnableHelp(true);
         setErrorMsg(
@@ -172,6 +234,7 @@ function LoginContent() {
     setErrorMsg(null);
     setInfoMsg(null);
     setNeedsProviderEnableHelp(false);
+    setUnauthorizedDomainHost(null);
 
     const cleanEmail = email.trim();
 
@@ -186,7 +249,13 @@ function LoginContent() {
 
       setLoading(true);
       try {
-        await sendPasswordResetEmail(auth, cleanEmail);
+        try {
+          await sendPasswordResetEmail(auth, cleanEmail, {
+            url: FIREBASE_AUTHORIZED_CONTINUE_URL,
+          });
+        } catch {
+          await sendPasswordResetEmail(auth, cleanEmail);
+        }
         await recordServerAuthAttempt(cleanEmail, false);
         setInfoMsg(
           'Password reset link sent! Please check your email inbox and spam folder.'
@@ -228,8 +297,12 @@ function LoginContent() {
             displayName: displayName.trim().slice(0, 120),
           });
         }
+        // Always pass the default Firebase authDomain as continueUrl so custom domains (like Vercel)
+        // never fail verification email dispatch with auth/unauthorized-domain
         try {
-          await sendEmailVerification(cred.user);
+          await sendEmailVerification(cred.user, {
+            url: FIREBASE_AUTHORIZED_CONTINUE_URL,
+          });
         } catch {
           // Non-blocking verification email dispatch
         }
@@ -242,10 +315,18 @@ function LoginContent() {
         router.replace(redirectPath);
       }
     } catch (err: unknown) {
-      await recordServerAuthAttempt(cleanEmail, false);
       const code = (err as { code?: string })?.code || '';
       const message = err instanceof Error ? err.message : String(err);
-      if (code === 'auth/operation-not-allowed') {
+      if (
+        code === 'auth/unauthorized-domain' ||
+        message.includes('auth/unauthorized-domain')
+      ) {
+        const host = getCurrentHostname();
+        setUnauthorizedDomainHost(host);
+        setErrorMsg(
+          `Domain (${host}) is not yet listed under Firebase Console → Authentication → Settings → Authorized domains.`
+        );
+      } else if (code === 'auth/operation-not-allowed') {
         setNeedsProviderEnableHelp(true);
         setErrorMsg(
           'Email/Password authentication is not enabled yet in your Firebase project.'
@@ -255,6 +336,7 @@ function LoginContent() {
         code === 'auth/wrong-password' ||
         code === 'auth/user-not-found'
       ) {
+        await recordServerAuthAttempt(cleanEmail, false);
         setErrorMsg('Invalid email or password. Please check your credentials.');
       } else if (code === 'auth/email-already-in-use') {
         setErrorMsg(
@@ -266,6 +348,7 @@ function LoginContent() {
           'Too many failed attempts detected by Firebase Auth. Please wait 60 seconds or reset your password.'
         );
       } else {
+        await recordServerAuthAttempt(cleanEmail, false);
         setErrorMsg(message || 'Authentication failed. Please try again.');
       }
     } finally {
@@ -360,11 +443,69 @@ function LoginContent() {
             </div>
 
             {errorMsg && (
-              <div className="p-3.5 rounded-2xl bg-red-50 border border-red-200 text-xs text-red-700 space-y-2">
+              <div className="p-4 rounded-2xl bg-red-50 border border-red-200 text-xs text-red-700 space-y-3">
                 <div className="flex items-start gap-2">
                   <AlertTriangle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
-                  <span>{errorMsg}</span>
+                  <span className="font-medium leading-relaxed">{errorMsg}</span>
                 </div>
+
+                {unauthorizedDomainHost && (
+                  <div className="pt-2.5 border-t border-red-200/80 space-y-2.5 text-[11px] text-slate-800 bg-white/90 p-3 rounded-xl border border-red-200/60">
+                    <div className="flex items-center gap-1.5 font-bold text-[#18181B]">
+                      <Globe className="w-3.5 h-3.5 text-[#6D5CE8]" />
+                      <span>
+                        How to Authorize &ldquo;{unauthorizedDomainHost}&rdquo; for Google Sign-In (10 sec):
+                      </span>
+                    </div>
+                    <ol className="list-decimal list-inside space-y-1 text-slate-600">
+                      <li>
+                        Copy your domain below:{' '}
+                        <code className="font-mono font-bold text-[#18181B] bg-slate-100 px-1.5 py-0.5 rounded">
+                          {unauthorizedDomainHost}
+                        </code>
+                      </li>
+                      <li>
+                        In Firebase Console, open <strong>Authentication</strong> &rarr; <strong>Settings</strong> tab &rarr; <strong>Authorized domains</strong>.
+                      </li>
+                      <li>
+                        Click <strong>Add domain</strong>, paste{' '}
+                        <strong>{unauthorizedDomainHost}</strong>, and click <strong>Add</strong>.
+                      </li>
+                    </ol>
+                    <div className="flex flex-wrap items-center gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={handleCopyDomain}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-semibold text-[11px] cursor-pointer"
+                      >
+                        {copiedDomain ? (
+                          <>
+                            <Check className="w-3 h-3 text-[#18B89A]" />
+                            <span>Copied {unauthorizedDomainHost}</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3 h-3" />
+                            <span>Copy Domain</span>
+                          </>
+                        )}
+                      </button>
+                      <a
+                        href={FIREBASE_AUTH_SETTINGS_CONSOLE_URL}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#6D5CE8] hover:bg-[#5B4AD6] text-white font-semibold text-[11px]"
+                      >
+                        <span>Open Authorized Domains Settings</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </div>
+                    <p className="text-[11px] font-semibold text-[#18B89A] pt-0.5">
+                      ✓ Tip: Email &amp; Password account creation below works immediately even before adding the domain!
+                    </p>
+                  </div>
+                )}
+
                 {needsProviderEnableHelp && (
                   <div className="pt-2 border-t border-red-200/80 space-y-1.5 text-[11px] text-red-800">
                     <p className="font-bold">
