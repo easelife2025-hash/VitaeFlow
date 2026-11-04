@@ -27,6 +27,7 @@ import {
   SECTION_LABELS,
 } from '@/lib/ats-deterministic';
 import { SAMPLE_JOB_DESCRIPTIONS } from '@/lib/sample-data';
+import { authenticatedFetch } from '@/lib/firebase';
 
 interface AtsMatcherProps {
   resume: ResumeDraft;
@@ -90,7 +91,7 @@ export default function AtsMatcher({
     setError(null);
 
     try {
-      const res = await fetch('/api/ai/ats-match', {
+      const res = await authenticatedFetch('/api/ai/ats-match', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

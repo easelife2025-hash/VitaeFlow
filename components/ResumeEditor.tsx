@@ -45,6 +45,7 @@ import {
   buildFactSafeSummaryVariations,
   buildFactSafeSkillSuggestions,
 } from '@/lib/ai-fallback';
+import { authenticatedFetch } from '@/lib/firebase';
 
 interface ResumeEditorProps {
   resume: ResumeDraft;
@@ -213,7 +214,7 @@ export default function ResumeEditor({
     const timeoutId = setTimeout(() => controller.abort(), 12000);
 
     try {
-      const res = await fetch('/api/ai/generate-summary', {
+      const res = await authenticatedFetch('/api/ai/generate-summary', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -287,7 +288,7 @@ export default function ResumeEditor({
     const timeoutId = setTimeout(() => controller.abort(), 12000);
 
     try {
-      const res = await fetch('/api/ai/suggest-skills', {
+      const res = await authenticatedFetch('/api/ai/suggest-skills', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

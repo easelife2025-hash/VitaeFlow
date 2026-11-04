@@ -1,0 +1,340 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // =========================================================================
+    // GLOBAL SAFETY NET (Default-Deny Catch-All)
+    // =========================================================================
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // =========================================================================
+    // GLOBAL PRIMITIVES
+    // =========================================================================
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && (
+        request.auth.token.email_verified == true ||
+        request.auth.token.firebase.sign_in_provider == 'password'
+      );
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // =========================================================================
+    // ENTITY VALIDATION BLUEPRINTS
+    // =========================================================================
+    function isValidUserProfile(data) {
+      return data.keys().hasAll([
+          'uid',
+          'displayName',
+          'email',
+          'defaultTemplateId',
+          'defaultAccentColor',
+          'defaultCompactMode',
+          'defaultFontFamily',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'uid',
+          'displayName',
+          'email',
+          'defaultTemplateId',
+          'defaultAccentColor',
+          'defaultCompactMode',
+          'defaultFontFamily',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.uid is string
+        && data.uid.size() >= 1
+        && data.uid.size() <= 128
+        && data.uid.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.uid == request.auth.uid
+        && data.displayName is string
+        && data.displayName.size() <= 120
+        && data.email is string
+        && data.email.size() >= 3
+        && data.email.size() <= 254
+        && data.defaultTemplateId is string
+        && data.defaultTemplateId.size() <= 40
+        && data.defaultTemplateId in [
+          'modern-violet',
+          'executive-minimal',
+          'teal-split',
+          'creative-studio',
+          'professional-ats',
+          'elegant-editorial'
+        ]
+        && data.defaultAccentColor is string
+        && data.defaultAccentColor.size() >= 4
+        && data.defaultAccentColor.size() <= 32
+        && data.defaultCompactMode is bool
+        && data.defaultFontFamily is string
+        && data.defaultFontFamily.size() <= 24
+        && data.defaultFontFamily in ['inter', 'lato', 'roboto', 'playfair']
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidCustomColorsMap(colors) {
+      return colors is map
+        && colors.keys().hasAll(['primary', 'accent', 'heading'])
+        && colors.keys().hasOnly(['primary', 'accent', 'heading', 'paletteId'])
+        && colors.primary is string && colors.primary.size() <= 32
+        && colors.accent is string && colors.accent.size() <= 32
+        && colors.heading is string && colors.heading.size() <= 32
+        && (!('paletteId' in colors) || (colors.paletteId is string && colors.paletteId.size() <= 40));
+    }
+
+    function isValidPersonalInfoMap(info) {
+      return info is map
+        && info.keys().hasAll([
+          'fullName',
+          'jobTitle',
+          'email',
+          'phone',
+          'location',
+          'website',
+          'linkedin',
+          'summary'
+        ])
+        && info.keys().hasOnly([
+          'fullName',
+          'jobTitle',
+          'email',
+          'phone',
+          'location',
+          'website',
+          'linkedin',
+          'summary',
+          'photoShape',
+          'photoZoom',
+          'photoOffsetX',
+          'photoOffsetY'
+        ])
+        && info.fullName is string && info.fullName.size() <= 160
+        && info.jobTitle is string && info.jobTitle.size() <= 160
+        && info.email is string && info.email.size() <= 254
+        && info.phone is string && info.phone.size() <= 64
+        && info.location is string && info.location.size() <= 160
+        && info.website is string && info.website.size() <= 300
+        && info.linkedin is string && info.linkedin.size() <= 300
+        && info.summary is string && info.summary.size() <= 4000;
+    }
+
+    function isValidResumeRecord(data) {
+      return data.keys().hasAll([
+          'id',
+          'ownerId',
+          'title',
+          'targetRole',
+          'templateId',
+          'accentColor',
+          'compactMode',
+          'fontFamily',
+          'decorativeHeading',
+          'customColors',
+          'personalInfo',
+          'experience',
+          'education',
+          'skills',
+          'projects',
+          'certifications',
+          'languages',
+          'jobDescriptionDraft',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'id',
+          'ownerId',
+          'title',
+          'targetRole',
+          'templateId',
+          'accentColor',
+          'compactMode',
+          'fontFamily',
+          'decorativeHeading',
+          'customColors',
+          'personalInfo',
+          'experience',
+          'education',
+          'skills',
+          'projects',
+          'certifications',
+          'languages',
+          'jobDescriptionDraft',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.id is string
+        && data.id.size() >= 1
+        && data.id.size() <= 128
+        && data.id.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.ownerId is string
+        && data.ownerId.size() >= 1
+        && data.ownerId.size() <= 128
+        && data.ownerId.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.ownerId == request.auth.uid
+        && data.title is string
+        && data.title.size() >= 1
+        && data.title.size() <= 200
+        && data.targetRole is string
+        && data.targetRole.size() <= 200
+        && data.templateId is string
+        && data.templateId.size() <= 40
+        && data.templateId in [
+          'modern-violet',
+          'executive-minimal',
+          'teal-split',
+          'creative-studio',
+          'professional-ats',
+          'elegant-editorial'
+        ]
+        && data.accentColor is string
+        && data.accentColor.size() >= 4
+        && data.accentColor.size() <= 32
+        && data.compactMode is bool
+        && data.fontFamily is string
+        && data.fontFamily.size() <= 24
+        && data.fontFamily in ['inter', 'lato', 'roboto', 'playfair']
+        && data.decorativeHeading is bool
+        && isValidCustomColorsMap(data.customColors)
+        && isValidPersonalInfoMap(data.personalInfo)
+        && data.experience is list
+        && data.experience.size() <= 30
+        && (data.experience.size() == 0 || data.experience[0] is map)
+        && data.education is list
+        && data.education.size() <= 20
+        && (data.education.size() == 0 || data.education[0] is map)
+        && data.skills is list
+        && data.skills.size() <= 100
+        && (data.skills.size() == 0 || (data.skills[0] is string && data.skills[0].size() <= 100))
+        && data.projects is list
+        && data.projects.size() <= 25
+        && (data.projects.size() == 0 || data.projects[0] is map)
+        && data.certifications is list
+        && data.certifications.size() <= 25
+        && (data.certifications.size() == 0 || data.certifications[0] is map)
+        && data.languages is list
+        && data.languages.size() <= 20
+        && (data.languages.size() == 0 || data.languages[0] is map)
+        && data.jobDescriptionDraft is string
+        && data.jobDescriptionDraft.size() <= 15000
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    // =========================================================================
+    // COLLECTION 1: /users/{userId} (PII Isolated to Owner Only)
+    // =========================================================================
+    match /users/{userId} {
+      allow get: if isSignedIn()
+        && isValidId(userId)
+        && request.auth.uid == userId;
+
+      allow list: if false;
+
+      allow create: if isVerifiedUser()
+        && isValidId(userId)
+        && request.auth.uid == userId
+        && isValidUserProfile(incoming())
+        && incoming().uid == userId
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+
+      allow update: if isVerifiedUser()
+        && isValidId(userId)
+        && request.auth.uid == userId
+        && isValidUserProfile(incoming())
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'displayName',
+          'email',
+          'defaultTemplateId',
+          'defaultAccentColor',
+          'defaultCompactMode',
+          'defaultFontFamily',
+          'updatedAt'
+        ]);
+
+      allow delete: if isVerifiedUser()
+        && isValidId(userId)
+        && request.auth.uid == userId;
+    }
+
+    // =========================================================================
+    // COLLECTION 2: /resumes/{resumeId} (Owner-Scoped Resume Documents)
+    // =========================================================================
+    match /resumes/{resumeId} {
+      allow get: if isSignedIn()
+        && isValidId(resumeId)
+        && existing().ownerId == request.auth.uid;
+
+      allow list: if isSignedIn()
+        && existing().ownerId == request.auth.uid;
+
+      allow create: if isVerifiedUser()
+        && isValidId(resumeId)
+        && isValidResumeRecord(incoming())
+        && incoming().id == resumeId
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && exists(/databases/$(database)/documents/users/$(incoming().ownerId));
+
+      allow update: if isVerifiedUser()
+        && isValidId(resumeId)
+        && isValidResumeRecord(incoming())
+        && existing().ownerId == request.auth.uid
+        && incoming().ownerId == existing().ownerId
+        && incoming().id == existing().id
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          // Action 1: Full Resume Content or Styling Save
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'title',
+            'targetRole',
+            'templateId',
+            'accentColor',
+            'compactMode',
+            'fontFamily',
+            'decorativeHeading',
+            'customColors',
+            'personalInfo',
+            'experience',
+            'education',
+            'skills',
+            'projects',
+            'certifications',
+            'languages',
+            'jobDescriptionDraft',
+            'updatedAt'
+          ])
+        );
+
+      allow delete: if isVerifiedUser()
+        && isValidId(resumeId)
+        && existing().ownerId == request.auth.uid;
+    }
+  }
+}

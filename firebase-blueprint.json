@@ -1,0 +1,231 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Authenticated user profile and default workspace preferences.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth UID of the user.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "User display name.",
+          "minLength": 0,
+          "maxLength": 120
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "User email address (PII isolated to owner only).",
+          "minLength": 3,
+          "maxLength": 254
+        },
+        "defaultTemplateId": {
+          "type": "string",
+          "description": "Default resume template identifier.",
+          "enum": [
+            "modern-violet",
+            "executive-minimal",
+            "teal-split",
+            "creative-studio",
+            "professional-ats",
+            "elegant-editorial"
+          ],
+          "maxLength": 40
+        },
+        "defaultAccentColor": {
+          "type": "string",
+          "description": "Default hex accent color.",
+          "minLength": 4,
+          "maxLength": 32
+        },
+        "defaultCompactMode": {
+          "type": "boolean",
+          "description": "Whether new resumes default to compact mode."
+        },
+        "defaultFontFamily": {
+          "type": "string",
+          "description": "Default font family for resumes.",
+          "enum": ["inter", "lato", "roboto", "playfair"],
+          "maxLength": 24
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the profile was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the profile was last updated."
+        }
+      },
+      "required": [
+        "uid",
+        "displayName",
+        "email",
+        "defaultTemplateId",
+        "defaultAccentColor",
+        "defaultCompactMode",
+        "defaultFontFamily",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "ResumeRecord": {
+      "title": "ResumeRecord",
+      "description": "A complete structured resume document owned by a specific authenticated user.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique resume document ID.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "ownerId": {
+          "type": "string",
+          "description": "UID of the authenticated owner in /users/{ownerId}.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "title": {
+          "type": "string",
+          "description": "Resume draft title.",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "targetRole": {
+          "type": "string",
+          "description": "Target role or job title for this resume.",
+          "minLength": 0,
+          "maxLength": 200
+        },
+        "templateId": {
+          "type": "string",
+          "description": "Selected A4 layout template ID.",
+          "enum": [
+            "modern-violet",
+            "executive-minimal",
+            "teal-split",
+            "creative-studio",
+            "professional-ats",
+            "elegant-editorial"
+          ],
+          "maxLength": 40
+        },
+        "accentColor": {
+          "type": "string",
+          "description": "Primary hex accent color.",
+          "minLength": 4,
+          "maxLength": 32
+        },
+        "compactMode": {
+          "type": "boolean",
+          "description": "Whether compact spacing is enabled."
+        },
+        "fontFamily": {
+          "type": "string",
+          "description": "Selected typography family.",
+          "enum": ["inter", "lato", "roboto", "playfair"],
+          "maxLength": 24
+        },
+        "decorativeHeading": {
+          "type": "boolean",
+          "description": "Whether decorative script headings are enabled."
+        },
+        "customColors": {
+          "type": "object",
+          "description": "Custom color palette map (primary, accent, heading)."
+        },
+        "personalInfo": {
+          "type": "object",
+          "description": "Structured personal contact and summary map."
+        },
+        "experience": {
+          "type": "array",
+          "description": "List of work experience role objects (max 30)."
+        },
+        "education": {
+          "type": "array",
+          "description": "List of education entry objects (max 20)."
+        },
+        "skills": {
+          "type": "array",
+          "description": "List of skill strings (max 100)."
+        },
+        "projects": {
+          "type": "array",
+          "description": "List of project entry objects (max 25)."
+        },
+        "certifications": {
+          "type": "array",
+          "description": "List of certification objects (max 25)."
+        },
+        "languages": {
+          "type": "array",
+          "description": "List of spoken language objects (max 20)."
+        },
+        "jobDescriptionDraft": {
+          "type": "string",
+          "description": "Optional target job description text for ATS matching.",
+          "minLength": 0,
+          "maxLength": 15000
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the resume was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the resume was last updated."
+        }
+      },
+      "required": [
+        "id",
+        "ownerId",
+        "title",
+        "targetRole",
+        "templateId",
+        "accentColor",
+        "compactMode",
+        "fontFamily",
+        "decorativeHeading",
+        "customColors",
+        "personalInfo",
+        "experience",
+        "education",
+        "skills",
+        "projects",
+        "certifications",
+        "languages",
+        "jobDescriptionDraft",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": {
+        "$ref": "#/entities/UserProfile"
+      },
+      "description": "Stores private user profile and default resume preferences. Strictly accessible only by the authenticated owner (userId == request.auth.uid)."
+    },
+    "/resumes/{resumeId}": {
+      "schema": {
+        "$ref": "#/entities/ResumeRecord"
+      },
+      "description": "Stores user resume drafts as native Firestore maps and lists. Every record is associated with its authenticated owner via ownerId == request.auth.uid."
+    }
+  }
+}

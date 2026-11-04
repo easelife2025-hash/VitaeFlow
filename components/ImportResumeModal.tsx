@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { ResumeDraft, LanguageProficiency } from '@/lib/types';
 import { createBlankResume } from '@/lib/sample-data';
+import { authenticatedFetch } from '@/lib/firebase';
 
 interface ImportResumeModalProps {
   isOpen: boolean;
@@ -216,7 +217,7 @@ export default function ImportResumeModal({
         }
       }
 
-      const res = await fetch('/api/ai/import-resume', {
+      const res = await authenticatedFetch('/api/ai/import-resume', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ rawText }),

@@ -2,7 +2,7 @@ import { Type } from '@google/genai';
 import { NextRequest, NextResponse } from 'next/server';
 import {
   FACT_PRESERVATION_RULES,
-  checkAndConsumeAiQuota,
+  verifyAndConsumeAiQuota,
   generateContentWithModelFallback,
   cleanValidatedString,
 } from '@/lib/ai-guard';
@@ -24,11 +24,11 @@ const VALID_CATEGORIES: SkillCategory[] = [
 ];
 
 export async function POST(req: NextRequest) {
-  const quota = checkAndConsumeAiQuota(req);
+  const quota = await verifyAndConsumeAiQuota(req);
   if (!quota.allowed) {
     return NextResponse.json(
       { error: quota.errorMessage, usage: quota.usage },
-      { status: 429 }
+      { status: quota.statusCode }
     );
   }
 

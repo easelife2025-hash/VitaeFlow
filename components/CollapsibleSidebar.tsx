@@ -56,7 +56,7 @@ export default function CollapsibleSidebar() {
     setIsSidebarCollapsed,
   } = useResume();
 
-  const isLandingPage = pathname === '/';
+  const isLandingPage = pathname === '/' || pathname === '/login';
 
   const deterministic = React.useMemo(
     () =>

@@ -17,6 +17,9 @@ import {
   ArrowLeft,
   Menu,
   BookOpen,
+  LogIn,
+  Cloud,
+  LogOut,
 } from 'lucide-react';
 import { useResume } from '@/context/ResumeContext';
 import { evaluateResumeDeterministically } from '@/lib/ats-deterministic';
@@ -40,6 +43,9 @@ export default function Header() {
     openDraftsModal,
     handleExportPdf,
     setIsMobileDrawerOpen,
+    user,
+    openAuthModal,
+    handleSignOut,
   } = useResume();
 
   const isLandingPage = pathname === '/';
@@ -153,8 +159,47 @@ export default function Header() {
           </nav>
         )}
 
-        {/* Zone 3: Context-Aware Right Actions */}
+        {/* Zone 3: Context-Aware Right Actions + Firebase Auth Control */}
         <div className="flex items-center gap-2 shrink-0">
+          {user ? (
+            <div className="flex items-center gap-1.5">
+              <Link
+                href="/settings"
+                title={`Signed in as ${user.email || user.displayName}`}
+                className="min-h-[38px] px-3 py-1.5 rounded-xl border border-[#18B89A]/40 bg-[#18B89A]/10 hover:bg-[#18B89A]/15 text-xs font-semibold text-[#18181B] flex items-center gap-1.5 whitespace-nowrap"
+              >
+                <Cloud className="w-3.5 h-3.5 text-[#18B89A] shrink-0" />
+                <span className="hidden md:inline max-w-[120px] truncate">
+                  {user.displayName || user.email?.split('@')[0] || 'Cloud Synced'}
+                </span>
+              </Link>
+              <button
+                type="button"
+                onClick={async () => {
+                  await handleSignOut();
+                  router.push('/');
+                }}
+                title="Log out of your account"
+                className="min-h-[38px] px-2.5 py-1.5 rounded-xl border border-slate-200 hover:border-slate-300 bg-white text-xs font-semibold text-slate-600 hover:text-[#18181B] flex items-center gap-1 cursor-pointer"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span className="hidden lg:inline">Log Out</span>
+              </button>
+            </div>
+          ) : (
+            <Link
+              href={
+                pathname && pathname !== '/' && pathname !== '/login'
+                  ? `/login?redirect=${encodeURIComponent(pathname)}`
+                  : '/login'
+              }
+              className="min-h-[38px] px-3 py-1.5 rounded-xl border border-[#6D5CE8]/35 bg-[#6D5CE8]/[0.06] hover:bg-[#6D5CE8]/15 text-xs font-semibold text-[#6D5CE8] flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+            >
+              <LogIn className="w-3.5 h-3.5 shrink-0" />
+              <span>Sign In / Sign Up</span>
+            </Link>
+          )}
+
           {!isLandingPage && (
             <button
               type="button"
@@ -201,3 +246,4 @@ export default function Header() {
     </header>
   );
 }
+

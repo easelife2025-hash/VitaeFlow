@@ -19,6 +19,7 @@ import {
   AiUsageMetadata,
 } from '@/lib/types';
 import { buildFactSafeWholeResumePolish } from '@/lib/ai-fallback';
+import { authenticatedFetch } from '@/lib/firebase';
 
 interface AiFullResumePolishModalProps {
   isOpen: boolean;
@@ -81,7 +82,7 @@ export default function AiFullResumePolishModal({
     const timeoutId = setTimeout(() => controller.abort(), 14000);
 
     try {
-      const res = await fetch('/api/ai/polish-resume', {
+      const res = await authenticatedFetch('/api/ai/polish-resume', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

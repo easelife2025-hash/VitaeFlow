@@ -6,6 +6,7 @@ import {
 } from '@google/genai';
 import { NextRequest } from 'next/server';
 import { AiUsageMetadata } from './types';
+import { verifyFirebaseIdToken, getClientIp } from './server-auth';
 
 export const GEMINI_MODEL = 'gemini-3.8-flash';
 
@@ -51,20 +52,22 @@ interface QuotaBucket {
   resetAtMs: number;
   modelIndex: number;
   switchedFromModel?: string;
+  burstCount: number;
+  burstResetAtMs: number;
 }
 
 const quotaStore = new Map<string, QuotaBucket>();
+const MAX_BURST_PER_MINUTE = 15; // Anti-spam & automated abuse rate limit per minute
 
-function getClientIdentifier(req: NextRequest): string {
+function getClientIdentifier(req: NextRequest, verifiedUid?: string): string {
+  if (verifiedUid) {
+    return `uid:${verifiedUid}`;
+  }
   const sessionHeader = req.headers.get('x-ai-session-id');
   if (sessionHeader && sessionHeader.trim()) {
     return `session:${sessionHeader.trim().slice(0, 64)}`;
   }
-  const forwarded = req.headers.get('x-forwarded-for');
-  if (forwarded) {
-    return `ip:${forwarded.split(',')[0].trim()}`;
-  }
-  return 'default-client';
+  return `ip:${getClientIp(req)}`;
 }
 
 export function getConfiguredLimit(req: NextRequest): number {
@@ -93,12 +96,61 @@ function getWindowMs(): number {
   return minutes * 60 * 1000;
 }
 
-export function checkAndConsumeAiQuota(req: NextRequest): {
+/**
+ * Verifies the Firebase Authentication ID token AND enforces per-user + per-minute rate limiting
+ * on protected AI server endpoints.
+ */
+export async function verifyAndConsumeAiQuota(req: NextRequest): Promise<{
+  allowed: boolean;
+  statusCode: number;
+  usage: AiUsageMetadata;
+  uid?: string;
+  errorMessage?: string;
+}> {
+  // 1. Reject oversized payloads (>150KB) to protect against DoS / abuse
+  const contentLength = parseInt(req.headers.get('content-length') || '0', 10);
+  if (contentLength > 150_000) {
+    return {
+      allowed: false,
+      statusCode: 413,
+      usage: getAiQuotaStatus(req),
+      errorMessage: 'Request payload is too large. Maximum allowed size is 150KB.',
+    };
+  }
+
+  // 2. Cryptographically verify Firebase Auth ID Token on the server
+  const tokenCheck = await verifyFirebaseIdToken(req);
+  if (!tokenCheck.verified || !tokenCheck.user) {
+    return {
+      allowed: false,
+      statusCode: tokenCheck.statusCode || 401,
+      usage: getAiQuotaStatus(req),
+      errorMessage:
+        tokenCheck.errorMessage ||
+        'Authentication required. Please sign in to use AI features.',
+    };
+  }
+
+  const verifiedUid = tokenCheck.user.uid;
+  const quota = checkAndConsumeAiQuota(req, verifiedUid);
+  return {
+    allowed: quota.allowed,
+    statusCode: quota.allowed ? 200 : 429,
+    usage: quota.usage,
+    uid: verifiedUid,
+    errorMessage: quota.errorMessage,
+  };
+}
+
+export function checkAndConsumeAiQuota(
+  req: NextRequest,
+  verifiedUid?: string
+): {
   allowed: boolean;
   usage: AiUsageMetadata;
   errorMessage?: string;
 } {
-  const clientId = getClientIdentifier(req);
+  const clientId = getClientIdentifier(req, verifiedUid);
   const limit = getConfiguredLimit(req);
   const windowMs = getWindowMs();
   const now = Date.now();
@@ -114,6 +166,35 @@ export function checkAndConsumeAiQuota(req: NextRequest): {
       resetAtMs: now + windowMs,
       modelIndex: 0,
       switchedFromModel: undefined,
+      burstCount: 0,
+      burstResetAtMs: now + 60_000,
+    };
+  }
+
+  if (now >= bucket.burstResetAtMs) {
+    bucket.burstCount = 0;
+    bucket.burstResetAtMs = now + 60_000;
+  }
+
+  bucket.burstCount += 1;
+  if (bucket.burstCount > MAX_BURST_PER_MINUTE) {
+    quotaStore.set(clientId, bucket);
+    const currentModel =
+      GEMINI_MODELS_CHAIN[bucket.modelIndex] || GEMINI_MODELS_CHAIN[0];
+    return {
+      allowed: false,
+      errorMessage:
+        'Rate limit reached: Too many AI requests in one minute. Please wait a few seconds before trying again.',
+      usage: {
+        used: bucket.used,
+        limit,
+        remaining: Math.max(0, limit - bucket.used),
+        resetAt: new Date(bucket.resetAtMs).toISOString(),
+        activeModel: currentModel.id,
+        activeModelLabel: currentModel.label,
+        switchedFromModel: bucket.switchedFromModel,
+        autoSwitchEnabled: true,
+      },
     };
   }
 
@@ -126,6 +207,8 @@ export function checkAndConsumeAiQuota(req: NextRequest): {
       resetAtMs: now + windowMs,
       modelIndex: nextIndex,
       switchedFromModel: previousModel.label,
+      burstCount: bucket.burstCount,
+      burstResetAtMs: bucket.burstResetAtMs,
     };
   }
 
@@ -150,8 +233,11 @@ export function checkAndConsumeAiQuota(req: NextRequest): {
   };
 }
 
-export function getAiQuotaStatus(req: NextRequest): AiUsageMetadata {
-  const clientId = getClientIdentifier(req);
+export function getAiQuotaStatus(
+  req: NextRequest,
+  verifiedUid?: string
+): AiUsageMetadata {
+  const clientId = getClientIdentifier(req, verifiedUid);
   const limit = getConfiguredLimit(req);
   const windowMs = getWindowMs();
   const now = Date.now();
@@ -183,6 +269,8 @@ export function getAiQuotaStatus(req: NextRequest): AiUsageMetadata {
       resetAtMs: now + windowMs,
       modelIndex: nextIndex,
       switchedFromModel: previousModel.label,
+      burstCount: 0,
+      burstResetAtMs: now + 60_000,
     };
     quotaStore.set(clientId, bucket);
   }
@@ -219,11 +307,6 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
   });
 }
 
-/**
- * Calls Gemini generateContent with low-latency thinking configuration and fast automatic model failover.
- * - Uses ThinkingLevel.LOW on gemini-3.8-flash to cut response time from ~8s down to ~1.5s.
- * - Enforces a per-attempt timeout so serverless functions on Vercel never hang or trigger 504 "Failed to fetch".
- */
 export async function generateContentWithModelFallback(
   req: NextRequest,
   params: Omit<GenerateContentParameters, 'model'>,
@@ -242,6 +325,8 @@ export async function generateContentWithModelFallback(
     used: initialUsage.used || 1,
     resetAtMs: now + windowMs,
     modelIndex: 0,
+    burstCount: 1,
+    burstResetAtMs: now + 60_000,
   };
 
   const startIndex = bucket.modelIndex % GEMINI_MODELS_CHAIN.length;
@@ -271,7 +356,6 @@ export async function generateContentWithModelFallback(
           9000
         );
       } catch (innerErr: unknown) {
-        // If thinkingConfig caused a 400 Invalid Argument on this endpoint, retry immediately with standard config
         if (candidateModel.id === 'gemini-3.8-flash') {
           response = await withTimeout(
             ai.models.generateContent({
@@ -293,6 +377,8 @@ export async function generateContentWithModelFallback(
           resetAtMs: now + windowMs,
           modelIndex: candidateIndex,
           switchedFromModel: prevModel.label,
+          burstCount: bucket.burstCount,
+          burstResetAtMs: bucket.burstResetAtMs,
         };
         quotaStore.set(clientId, bucket);
       }
@@ -320,7 +406,19 @@ export async function generateContentWithModelFallback(
     : new Error('All Gemini models in the fallback chain are temporarily busy.');
 }
 
-export function cleanValidatedString(val: unknown, fallback = ''): string {
+/**
+ * Validates and sanitizes untrusted user text inputs against control characters,
+ * script tags, and oversized strings.
+ */
+export function cleanValidatedString(
+  val: unknown,
+  fallback = '',
+  maxLength = 4000
+): string {
   if (typeof val !== 'string') return fallback;
-  return val.trim();
+  const sanitized = val
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+    .replace(/<\s*\/?\s*script[^>]*>/gi, '')
+    .trim();
+  return sanitized.slice(0, maxLength) || fallback;
 }

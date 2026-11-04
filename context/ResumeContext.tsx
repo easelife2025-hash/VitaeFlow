@@ -6,7 +6,26 @@ import React, {
   useState,
   useEffect,
   useCallback,
+  useRef,
 } from 'react';
+import {
+  User,
+  onAuthStateChanged,
+  signOut as firebaseSignOut,
+  deleteUser,
+} from 'firebase/auth';
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  setDoc,
+  updateDoc,
+  deleteDoc,
+  query,
+  where,
+  onSnapshot,
+} from 'firebase/firestore';
 import {
   ResumeDraft,
   TemplateId,
@@ -24,10 +43,25 @@ import AiBulletModal from '@/components/AiBulletModal';
 import AiFullResumePolishModal from '@/components/AiFullResumePolishModal';
 import ImportResumeModal from '@/components/ImportResumeModal';
 import DraftsModal from '@/components/DraftsModal';
+import AuthModal from '@/components/AuthModal';
 import { createResumeContextSnapshot } from '@/lib/ai-fallback';
+import {
+  auth,
+  db,
+  OperationType,
+  handleFirestoreError,
+  isQuotaExceededError,
+  buildValidatedUserProfilePayload,
+  buildValidatedResumePayload,
+  firestoreDocToResumeDraft,
+  sanitizeDocumentId,
+} from '@/lib/firebase';
 
-const STORAGE_KEY = 'vitaeflow_resumes_v2';
-const PREFS_KEY = 'vitaeflow_prefs_v1';
+const getUserStorageKey = (uid: string) =>
+  `vitaeflow_resumes_v2_${sanitizeDocumentId(uid, 'user')}`;
+const getUserPrefsKey = (uid: string) =>
+  `vitaeflow_prefs_v1_${sanitizeDocumentId(uid, 'user')}`;
+const ROUTE_LOCK_KEY = 'vitaeflow_route_lock_v1';
 
 export interface UserPreferences {
   defaultTemplateId: TemplateId;
@@ -96,6 +130,22 @@ interface ResumeContextValue {
   setIsMobileDrawerOpen: React.Dispatch<React.SetStateAction<boolean>>;
   isSidebarCollapsed: boolean;
   setIsSidebarCollapsed: React.Dispatch<React.SetStateAction<boolean>>;
+  // Firebase Authentication & Cloud Firestore State
+  user: User | null;
+  isAuthReady: boolean;
+  isCloudSyncing: boolean;
+  lastCloudSyncedAt: string | null;
+  cloudQuotaExceeded: boolean;
+  dismissQuotaBanner: () => void;
+  isProtectedRouteEnforced: boolean;
+  setIsProtectedRouteEnforced: (val: boolean) => void;
+  openAuthModal: () => void;
+  closeAuthModal: () => void;
+  handleRefreshAuthUser: () => Promise<void>;
+  handleSaveAllDraftsToCloud: (draftsOverride?: ResumeDraft[]) => Promise<boolean>;
+  handleReloadResumesFromCloud: () => Promise<boolean>;
+  handleSignOut: () => Promise<void>;
+  handleDeleteAccountAndData: () => Promise<{ ok: boolean; error?: string }>;
 }
 
 const ResumeContext = createContext<ResumeContextValue | null>(null);
@@ -112,19 +162,36 @@ export function ResumeProvider({ children }: { children: React.ReactNode }) {
   const [isDraftsModalOpen, setIsDraftsModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isFullPolishModalOpen, setIsFullPolishModalOpen] = useState(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [hasLoadedStorage, setHasLoadedStorage] = useState(false);
+
+  // Firebase Auth & Cloud Firestore State
+  const [user, setUser] = useState<User | null>(null);
+  const [isAuthReady, setIsAuthReady] = useState<boolean>(false);
+  const [isCloudSyncing, setIsCloudSyncing] = useState<boolean>(false);
+  const [lastCloudSyncedAt, setLastCloudSyncedAt] = useState<string | null>(
+    null
+  );
+  const [cloudQuotaExceeded, setCloudQuotaExceeded] = useState<boolean>(false);
+  const [isProtectedRouteEnforced, setIsProtectedRouteEnforcedState] =
+    useState<boolean>(true);
+
+  const draftsRef = useRef<ResumeDraft[]>(drafts);
+  draftsRef.current = drafts;
+  const prefsRef = useRef<UserPreferences>(preferences);
+  prefsRef.current = preferences;
 
   // Navigation Sidebar & Mobile Drawer state
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
-  // Configurable AI Usage Quota State (with Automatic Multi-Model Failover)
+  // Configurable AI Usage Quota State
   const [customAiLimit, setCustomAiLimit] = useState<number>(50);
   const [aiUsage, setAiUsage] = useState<AiUsageMetadata>({
     used: 0,
     limit: 50,
     remaining: 50,
-    resetAt: new Date(Date.now() + 3600000).toISOString(),
+    resetAt: '2026-11-04T00:00:00.000Z',
     activeModel: 'gemini-3.8-flash',
     activeModelLabel: 'Gemini 3.8 Flash',
     autoSwitchEnabled: true,
@@ -146,50 +213,388 @@ export function ResumeProvider({ children }: { children: React.ReactNode }) {
     onApply: () => {},
   });
 
-  // Load saved drafts & preferences from localStorage on mount
+  // Load route lock setting on mount (never load shared unauthenticated resumes)
   useEffect(() => {
     try {
-      const raw = window.localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setDrafts(parsed);
-          setActiveDraftId(parsed[0].id);
-        }
-      }
-      const rawPrefs = window.localStorage.getItem(PREFS_KEY);
-      if (rawPrefs) {
-        const parsedPrefs = JSON.parse(rawPrefs);
-        if (parsedPrefs && typeof parsedPrefs === 'object') {
-          setPreferences((prev) => ({ ...prev, ...parsedPrefs }));
-        }
+      // Remove any legacy shared storage key so resume storage is strictly per-UID
+      window.localStorage.removeItem('vitaeflow_resumes_v2');
+      window.localStorage.removeItem('vitaeflow_prefs_v1');
+      const rawLock = window.localStorage.getItem(ROUTE_LOCK_KEY);
+      if (rawLock === 'false') {
+        setIsProtectedRouteEnforcedState(false);
+      } else {
+        setIsProtectedRouteEnforcedState(true);
       }
     } catch {
-      // Fallback to SAMPLE_RESUMES
+      // Ignore
     } finally {
       setHasLoadedStorage(true);
     }
   }, []);
 
-  // Save drafts to localStorage on change
-  useEffect(() => {
-    if (!hasLoadedStorage) return;
+  const setIsProtectedRouteEnforced = (val: boolean) => {
+    setIsProtectedRouteEnforcedState(val);
     try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(drafts));
+      window.localStorage.setItem(ROUTE_LOCK_KEY, String(val));
     } catch {
-      // Ignore storage quota errors
+      // Ignore
     }
-  }, [drafts, hasLoadedStorage]);
+  };
 
-  // Save preferences on change
+  // Save drafts ONLY to the authenticated user's UID-isolated localStorage cache
   useEffect(() => {
-    if (!hasLoadedStorage) return;
+    if (!hasLoadedStorage || !user) return;
     try {
-      window.localStorage.setItem(PREFS_KEY, JSON.stringify(preferences));
+      window.localStorage.setItem(
+        getUserStorageKey(user.uid),
+        JSON.stringify(drafts)
+      );
     } catch {
       // Ignore storage quota errors
     }
-  }, [preferences, hasLoadedStorage]);
+  }, [drafts, hasLoadedStorage, user]);
+
+  // Save preferences ONLY to the authenticated user's UID-isolated localStorage cache
+  useEffect(() => {
+    if (!hasLoadedStorage || !user) return;
+    try {
+      window.localStorage.setItem(
+        getUserPrefsKey(user.uid),
+        JSON.stringify(preferences)
+      );
+    } catch {
+      // Ignore storage quota errors
+    }
+  }, [preferences, hasLoadedStorage, user]);
+
+  // Helper: Ensure /users/{uid} exists in Firestore before writing /resumes
+  const ensureUserProfileDoc = useCallback(async (currentUser: User) => {
+    const safeUid = sanitizeDocumentId(currentUser.uid, 'user');
+    const userPath = `users/${safeUid}`;
+    const userRef = doc(db, 'users', safeUid);
+
+    try {
+      const snap = await getDoc(userRef);
+      if (!snap.exists()) {
+        const createPayload = buildValidatedUserProfilePayload(
+          {
+            uid: safeUid,
+            displayName:
+              currentUser.displayName ||
+              currentUser.email?.split('@')[0] ||
+              'VitaeFlow User',
+            email: currentUser.email || 'user@example.com',
+            defaultTemplateId: prefsRef.current.defaultTemplateId,
+            defaultAccentColor: prefsRef.current.defaultAccentColor,
+            defaultCompactMode: prefsRef.current.defaultCompactMode,
+            defaultFontFamily: prefsRef.current.defaultFontFamily,
+          },
+          true
+        );
+        await setDoc(userRef, createPayload);
+      } else {
+        const data = snap.data();
+        if (data) {
+          setPreferences((prev) => ({
+            defaultTemplateId:
+              (data.defaultTemplateId as TemplateId) || prev.defaultTemplateId,
+            defaultAccentColor:
+              (data.defaultAccentColor as AccentColor) ||
+              prev.defaultAccentColor,
+            defaultCompactMode:
+              typeof data.defaultCompactMode === 'boolean'
+                ? data.defaultCompactMode
+                : prev.defaultCompactMode,
+            defaultFontFamily:
+              (data.defaultFontFamily as ResumeFontFamily) ||
+              prev.defaultFontFamily,
+          }));
+        }
+      }
+    } catch (error) {
+      if (isQuotaExceededError(error)) {
+        setCloudQuotaExceeded(true);
+        return;
+      }
+      handleFirestoreError(error, OperationType.WRITE, userPath);
+    }
+  }, []);
+
+  // Save a single ResumeDraft to Firestore (/resumes/{docId})
+  const upsertResumeDraftToCloud = useCallback(
+    async (draft: ResumeDraft, currentUser: User) => {
+      await ensureUserProfileDoc(currentUser);
+
+      const safeUid = sanitizeDocumentId(currentUser.uid, 'user');
+      const docId = sanitizeDocumentId(`${safeUid}_${draft.id}`, 'resume');
+      const resumePath = `resumes/${docId}`;
+      const resumeRef = doc(db, 'resumes', docId);
+
+      try {
+        const snap = await getDoc(resumeRef);
+        if (!snap.exists()) {
+          const { data } = buildValidatedResumePayload(draft, safeUid, true);
+          await setDoc(resumeRef, data);
+        } else {
+          const { data } = buildValidatedResumePayload(draft, safeUid, false);
+          await updateDoc(resumeRef, data);
+        }
+        setLastCloudSyncedAt(new Date().toISOString());
+      } catch (error) {
+        if (isQuotaExceededError(error)) {
+          setCloudQuotaExceeded(true);
+          return;
+        }
+        handleFirestoreError(error, OperationType.WRITE, resumePath);
+      }
+    },
+    [ensureUserProfileDoc]
+  );
+
+  // Save all drafts to Cloud Firestore
+  const handleSaveAllDraftsToCloud = useCallback(
+    async (draftsOverride?: ResumeDraft[]): Promise<boolean> => {
+      const currentUser = auth.currentUser;
+      if (!currentUser) return false;
+
+      const listToSave = draftsOverride || draftsRef.current;
+      setIsCloudSyncing(true);
+      try {
+        await ensureUserProfileDoc(currentUser);
+        for (const d of listToSave) {
+          await upsertResumeDraftToCloud(d, currentUser);
+        }
+        setLastCloudSyncedAt(new Date().toISOString());
+        return true;
+      } catch {
+        return false;
+      } finally {
+        setIsCloudSyncing(false);
+      }
+    },
+    [ensureUserProfileDoc, upsertResumeDraftToCloud]
+  );
+
+  // Reload resumes from Cloud Firestore
+  const handleReloadResumesFromCloud = useCallback(async (): Promise<boolean> => {
+    const currentUser = auth.currentUser;
+    if (!currentUser) return false;
+    const safeUid = sanitizeDocumentId(currentUser.uid, 'user');
+    setIsCloudSyncing(true);
+    try {
+      const q = query(
+        collection(db, 'resumes'),
+        where('ownerId', '==', safeUid)
+      );
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        const cloudDrafts = snap.docs.map((docSnap) =>
+          firestoreDocToResumeDraft(docSnap.id, docSnap.data())
+        );
+        setDrafts(cloudDrafts);
+        setActiveDraftId(cloudDrafts[0].id);
+        setLastCloudSyncedAt(new Date().toISOString());
+        return true;
+      } else {
+        // Seed initial local drafts into user's Firestore account
+        await handleSaveAllDraftsToCloud(draftsRef.current);
+        return true;
+      }
+    } catch (error) {
+      if (isQuotaExceededError(error)) {
+        setCloudQuotaExceeded(true);
+        return false;
+      }
+      handleFirestoreError(error, OperationType.LIST, 'resumes');
+    } finally {
+      setIsCloudSyncing(false);
+    }
+  }, [handleSaveAllDraftsToCloud]);
+
+  // Listen to Firebase Auth state & attach real-time onSnapshot listener when authenticated
+  useEffect(() => {
+    let unsubscribeSnapshot: (() => void) | null = null;
+
+    const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
+      setUser(firebaseUser);
+      setIsAuthReady(true);
+
+      if (unsubscribeSnapshot) {
+        unsubscribeSnapshot();
+        unsubscribeSnapshot = null;
+      }
+
+      if (firebaseUser) {
+        // 1. Load this user's UID-isolated local cache first if available
+        try {
+          const rawUserDrafts = window.localStorage.getItem(
+            getUserStorageKey(firebaseUser.uid)
+          );
+          if (rawUserDrafts) {
+            const parsedUserDrafts = JSON.parse(rawUserDrafts);
+            if (Array.isArray(parsedUserDrafts) && parsedUserDrafts.length > 0) {
+              setDrafts(parsedUserDrafts);
+              setActiveDraftId(parsedUserDrafts[0].id);
+            }
+          }
+          const rawUserPrefs = window.localStorage.getItem(
+            getUserPrefsKey(firebaseUser.uid)
+          );
+          if (rawUserPrefs) {
+            const parsedUserPrefs = JSON.parse(rawUserPrefs);
+            if (parsedUserPrefs && typeof parsedUserPrefs === 'object') {
+              setPreferences((prev) => ({ ...prev, ...parsedUserPrefs }));
+            }
+          }
+        } catch {
+          // Ignore local cache parse errors
+        }
+
+        const safeUid = sanitizeDocumentId(firebaseUser.uid, 'user');
+        await ensureUserProfileDoc(firebaseUser);
+
+        const q = query(
+          collection(db, 'resumes'),
+          where('ownerId', '==', safeUid)
+        );
+
+        unsubscribeSnapshot = onSnapshot(
+          q,
+          async (snapshot) => {
+            if (!snapshot.empty) {
+              const cloudDrafts = snapshot.docs.map((docSnap) =>
+                firestoreDocToResumeDraft(docSnap.id, docSnap.data())
+              );
+              setDrafts(cloudDrafts);
+              setActiveDraftId((prevId) =>
+                cloudDrafts.some((d) => d.id === prevId)
+                  ? prevId
+                  : cloudDrafts[0].id
+              );
+              setLastCloudSyncedAt(new Date().toISOString());
+            } else {
+              // Automatically save user's starter drafts to their private cloud account on first login
+              await handleSaveAllDraftsToCloud(draftsRef.current);
+            }
+          },
+          (error) => {
+            if (isQuotaExceededError(error)) {
+              setCloudQuotaExceeded(true);
+              return;
+            }
+            handleFirestoreError(error, OperationType.LIST, 'resumes');
+          }
+        );
+      } else {
+        // Clear in-memory drafts back to clean sample templates on sign-out so no user data leaks
+        setDrafts(SAMPLE_RESUMES);
+        setActiveDraftId(SAMPLE_RESUMES[0].id);
+        setPreferences(DEFAULT_PREFS);
+        setLastCloudSyncedAt(null);
+      }
+    });
+
+    return () => {
+      unsubscribeAuth();
+      if (unsubscribeSnapshot) {
+        unsubscribeSnapshot();
+      }
+    };
+  }, [ensureUserProfileDoc, handleSaveAllDraftsToCloud]);
+
+  const handleRefreshAuthUser = async () => {
+    if (!auth.currentUser) return;
+    await auth.currentUser.reload();
+    setUser({ ...auth.currentUser } as User);
+    await ensureUserProfileDoc(auth.currentUser);
+    await handleSaveAllDraftsToCloud(draftsRef.current);
+  };
+
+  const handleSignOut = async () => {
+    await firebaseSignOut(auth);
+    setUser(null);
+    setDrafts(SAMPLE_RESUMES);
+    setActiveDraftId(SAMPLE_RESUMES[0].id);
+    setPreferences(DEFAULT_PREFS);
+    setLastCloudSyncedAt(null);
+  };
+
+  const handleDeleteAccountAndData = async (): Promise<{
+    ok: boolean;
+    error?: string;
+  }> => {
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      return { ok: false, error: 'No authenticated user is signed in.' };
+    }
+
+    const safeUid = sanitizeDocumentId(currentUser.uid, 'user');
+    setIsCloudSyncing(true);
+    try {
+      // 1. Delete all owned resume documents in /resumes
+      const q = query(
+        collection(db, 'resumes'),
+        where('ownerId', '==', safeUid)
+      );
+      const snap = await getDocs(q);
+      for (const docSnap of snap.docs) {
+        try {
+          await deleteDoc(doc(db, 'resumes', docSnap.id));
+        } catch (err) {
+          if (isQuotaExceededError(err)) {
+            setCloudQuotaExceeded(true);
+          } else {
+            handleFirestoreError(
+              err,
+              OperationType.DELETE,
+              `resumes/${docSnap.id}`
+            );
+          }
+        }
+      }
+
+      // 2. Delete user profile document in /users/{uid}
+      const userDocRef = doc(db, 'users', safeUid);
+      const userDocSnap = await getDoc(userDocRef);
+      if (userDocSnap.exists()) {
+        try {
+          await deleteDoc(userDocRef);
+        } catch (err) {
+          if (isQuotaExceededError(err)) {
+            setCloudQuotaExceeded(true);
+          } else {
+            handleFirestoreError(err, OperationType.DELETE, `users/${safeUid}`);
+          }
+        }
+      }
+
+      // 3. Clear local browser storage
+      handleClearLocalStorage();
+
+      // 4. Delete Firebase Auth User
+      await deleteUser(currentUser);
+      setUser(null);
+      return { ok: true };
+    } catch (err: unknown) {
+      const code = (err as { code?: string })?.code || '';
+      if (code === 'auth/requires-recent-login') {
+        return {
+          ok: false,
+          error:
+            'Your cloud resumes and profile were deleted, but Firebase requires a fresh sign-in before deleting your Auth login. Please sign out, sign back in, and click Delete Account again.',
+        };
+      }
+      return {
+        ok: false,
+        error:
+          err instanceof Error
+            ? err.message
+            : 'Failed to complete account deletion.',
+      };
+    } finally {
+      setIsCloudSyncing(false);
+    }
+  };
 
   // Fetch initial server-side AI quota status
   const syncAiQuota = useCallback(
@@ -241,6 +646,9 @@ export function ResumeProvider({ children }: { children: React.ReactNode }) {
     setDrafts((prev) =>
       prev.map((d) => (d.id === updated.id ? updated : d))
     );
+    if (auth.currentUser) {
+      void upsertResumeDraftToCloud(updated, auth.currentUser);
+    }
   };
 
   const handleUpdateTemplate = (templateId: TemplateId) => {
@@ -308,6 +716,9 @@ export function ResumeProvider({ children }: { children: React.ReactNode }) {
     setDrafts((prev) => [fresh, ...prev]);
     setActiveDraftId(fresh.id);
     setIsDraftsModalOpen(false);
+    if (auth.currentUser) {
+      void upsertResumeDraftToCloud(fresh, auth.currentUser);
+    }
     return fresh;
   };
 
@@ -320,6 +731,9 @@ export function ResumeProvider({ children }: { children: React.ReactNode }) {
     };
     setDrafts((prev) => [styledDraft, ...prev]);
     setActiveDraftId(styledDraft.id);
+    if (auth.currentUser) {
+      void upsertResumeDraftToCloud(styledDraft, auth.currentUser);
+    }
   };
 
   const handleDuplicateDraft = (id: string) => {
@@ -333,15 +747,27 @@ export function ResumeProvider({ children }: { children: React.ReactNode }) {
     };
     setDrafts((prev) => [copy, ...prev]);
     setActiveDraftId(copy.id);
+    if (auth.currentUser) {
+      void upsertResumeDraftToCloud(copy, auth.currentUser);
+    }
   };
 
   const handleRenameDraft = (id: string, newTitle: string) => {
     setDrafts((prev) =>
-      prev.map((d) =>
-        d.id === id
-          ? { ...d, title: newTitle, updatedAt: new Date().toISOString() }
-          : d
-      )
+      prev.map((d) => {
+        if (d.id === id) {
+          const updated = {
+            ...d,
+            title: newTitle.slice(0, 200),
+            updatedAt: new Date().toISOString(),
+          };
+          if (auth.currentUser) {
+            void upsertResumeDraftToCloud(updated, auth.currentUser);
+          }
+          return updated;
+        }
+        return d;
+      })
     );
   };
 
@@ -352,12 +778,27 @@ export function ResumeProvider({ children }: { children: React.ReactNode }) {
     if (activeDraftId === id) {
       setActiveDraftId(remaining[0].id);
     }
+    if (auth.currentUser) {
+      const safeUid = sanitizeDocumentId(auth.currentUser.uid, 'user');
+      const docId = sanitizeDocumentId(`${safeUid}_${id}`, 'resume');
+      const resumePath = `resumes/${docId}`;
+      void deleteDoc(doc(db, 'resumes', docId)).catch((err) => {
+        if (isQuotaExceededError(err)) {
+          setCloudQuotaExceeded(true);
+        } else {
+          handleFirestoreError(err, OperationType.DELETE, resumePath);
+        }
+      });
+    }
   };
 
   const handleSelectExampleResume = (exampleDraft: ResumeDraft) => {
     const exists = drafts.some((d) => d.id === exampleDraft.id);
     if (!exists) {
       setDrafts((prev) => [exampleDraft, ...prev]);
+      if (auth.currentUser) {
+        void upsertResumeDraftToCloud(exampleDraft, auth.currentUser);
+      }
     }
     setActiveDraftId(exampleDraft.id);
   };
@@ -367,13 +808,47 @@ export function ResumeProvider({ children }: { children: React.ReactNode }) {
   };
 
   const handleUpdatePreferences = (next: Partial<UserPreferences>) => {
-    setPreferences((prev) => ({ ...prev, ...next }));
+    setPreferences((prev) => {
+      const merged = { ...prev, ...next };
+      if (auth.currentUser) {
+        const safeUid = sanitizeDocumentId(auth.currentUser.uid, 'user');
+        const userRef = doc(db, 'users', safeUid);
+        const updatePayload = buildValidatedUserProfilePayload(
+          {
+            uid: safeUid,
+            displayName:
+              auth.currentUser.displayName ||
+              auth.currentUser.email?.split('@')[0] ||
+              'VitaeFlow User',
+            email: auth.currentUser.email || 'user@example.com',
+            defaultTemplateId: merged.defaultTemplateId,
+            defaultAccentColor: merged.defaultAccentColor,
+            defaultCompactMode: merged.defaultCompactMode,
+            defaultFontFamily: merged.defaultFontFamily,
+          },
+          false
+        );
+        void updateDoc(userRef, updatePayload).catch((err) => {
+          if (isQuotaExceededError(err)) {
+            setCloudQuotaExceeded(true);
+          }
+        });
+      }
+      return merged;
+    });
   };
 
   const handleExportAllJsonBackup = () => {
     const payload = {
       version: 2,
       exportedAt: new Date().toISOString(),
+      owner: user
+        ? {
+            uid: user.uid,
+            email: user.email,
+            displayName: user.displayName,
+          }
+        : null,
       preferences,
       drafts,
     };
@@ -416,6 +891,9 @@ export function ResumeProvider({ children }: { children: React.ReactNode }) {
       if (parsed?.preferences) {
         setPreferences((prev) => ({ ...prev, ...parsed.preferences }));
       }
+      if (auth.currentUser) {
+        void handleSaveAllDraftsToCloud(list);
+      }
       return { ok: true, count: list.length };
     } catch {
       return {
@@ -429,17 +907,24 @@ export function ResumeProvider({ children }: { children: React.ReactNode }) {
   const handleResetToSampleResumes = () => {
     setDrafts(SAMPLE_RESUMES);
     setActiveDraftId(SAMPLE_RESUMES[0].id);
-    try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(SAMPLE_RESUMES));
-    } catch {
-      // Ignore
+    if (auth.currentUser) {
+      try {
+        window.localStorage.setItem(
+          getUserStorageKey(auth.currentUser.uid),
+          JSON.stringify(SAMPLE_RESUMES)
+        );
+      } catch {
+        // Ignore
+      }
     }
   };
 
   const handleClearLocalStorage = () => {
     try {
-      window.localStorage.removeItem(STORAGE_KEY);
-      window.localStorage.removeItem(PREFS_KEY);
+      if (auth.currentUser) {
+        window.localStorage.removeItem(getUserStorageKey(auth.currentUser.uid));
+        window.localStorage.removeItem(getUserPrefsKey(auth.currentUser.uid));
+      }
     } catch {
       // Ignore
     }
@@ -525,9 +1010,30 @@ export function ResumeProvider({ children }: { children: React.ReactNode }) {
         setIsMobileDrawerOpen,
         isSidebarCollapsed,
         setIsSidebarCollapsed,
+        user,
+        isAuthReady,
+        isCloudSyncing,
+        lastCloudSyncedAt,
+        cloudQuotaExceeded,
+        dismissQuotaBanner: () => setCloudQuotaExceeded(false),
+        isProtectedRouteEnforced,
+        setIsProtectedRouteEnforced,
+        openAuthModal: () => setIsAuthModalOpen(true),
+        closeAuthModal: () => setIsAuthModalOpen(false),
+        handleRefreshAuthUser,
+        handleSaveAllDraftsToCloud,
+        handleReloadResumesFromCloud,
+        handleSignOut,
+        handleDeleteAccountAndData,
       }}
     >
       {children}
+
+      {/* Global Firebase Authentication Modal */}
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+      />
 
       {/* Global AI Bullet Point Enhancer & Wording Improver Modal */}
       <AiBulletModal

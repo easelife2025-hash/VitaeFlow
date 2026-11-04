@@ -20,6 +20,7 @@ import {
   WholeResumeContextSnapshot,
 } from '@/lib/types';
 import { buildFactSafeBulletVariations } from '@/lib/ai-fallback';
+import { authenticatedFetch } from '@/lib/firebase';
 
 interface AiBulletModalProps {
   isOpen: boolean;
@@ -92,7 +93,7 @@ export default function AiBulletModal({
       const timeoutId = setTimeout(() => controller.abort(), 12000);
 
       try {
-        const res = await fetch('/api/ai/enhance-bullet', {
+        const res = await authenticatedFetch('/api/ai/enhance-bullet', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
