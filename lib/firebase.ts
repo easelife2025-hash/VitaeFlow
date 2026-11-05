@@ -352,10 +352,11 @@ export function buildValidatedUserProfilePayload(
   )
     ? params.defaultTemplateId
     : 'modern-violet';
+  const rawAccent = String(params.defaultAccentColor || '').trim();
   const safeAccent =
-    String(params.defaultAccentColor || '#6D5CE8')
-      .trim()
-      .slice(0, MAX_ACCENT_COLOR_LENGTH) || '#6D5CE8';
+    rawAccent.length >= 4 && rawAccent.length <= MAX_ACCENT_COLOR_LENGTH
+      ? rawAccent
+      : '#6D5CE8';
   const safeFont: ResumeFontFamily =
     params.defaultFontFamily && ALLOWED_FONTS.includes(params.defaultFontFamily)
       ? params.defaultFontFamily
@@ -404,10 +405,12 @@ export function buildValidatedResumePayload(
     draft.fontFamily && ALLOWED_FONTS.includes(draft.fontFamily)
       ? draft.fontFamily
       : 'inter';
+  const rawDraftAccent = String(draft.accentColor || '').trim();
   const safeAccent =
-    String(draft.accentColor || '#6D5CE8')
-      .trim()
-      .slice(0, MAX_ACCENT_COLOR_LENGTH) || '#6D5CE8';
+    rawDraftAccent.length >= 4 &&
+    rawDraftAccent.length <= MAX_ACCENT_COLOR_LENGTH
+      ? rawDraftAccent
+      : '#6D5CE8';
   const safeTitle =
     String(draft.title || 'Untitled Resume')
       .trim()
