@@ -2,7 +2,6 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
 import { motion } from 'motion/react';
 import {
   Sparkles,
@@ -88,12 +87,11 @@ export default function HeroSection() {
               className="w-full h-full object-cover object-center"
             />
           ) : (
-            <Image
+            <img
               src={INTERVIEW_SCENES[activeSceneIndex].src}
               alt={INTERVIEW_SCENES[activeSceneIndex].caption}
-              fill
               referrerPolicy="no-referrer"
-              className="object-cover object-center transition-opacity duration-700"
+              className="w-full h-full object-cover object-center transition-opacity duration-700"
             />
           )}
 

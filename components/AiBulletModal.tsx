@@ -190,10 +190,7 @@ export default function AiBulletModal({
     setError(null);
 
     if (initialText.trim().length > 4) {
-      const timer = setTimeout(() => {
-        void handleGenerate(initialTone, initialText, mode);
-      }, 0);
-      return () => clearTimeout(timer);
+      void handleGenerate(initialTone, initialText, mode);
     }
   }, [isOpen, initialText, mode, handleGenerate]);
 

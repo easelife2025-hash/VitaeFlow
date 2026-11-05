@@ -57,13 +57,13 @@ function LoginContent() {
   const searchParams = useSearchParams();
   const { user, isAuthReady, handleRefreshAuthUser } = useResume();
 
-  const rawRedirect = searchParams?.get('redirect') || null;
+  const rawRedirect = searchParams.get('redirect');
   const redirectPath = sanitizeRedirectPath(rawRedirect, '/resume-builder');
   const targetFeatureName =
     FEATURE_LABELS[redirectPath] || 'Your Resume Workspace';
 
   const initialMode =
-    searchParams?.get('mode') === 'signup' ? 'signup' : 'signin';
+    searchParams.get('mode') === 'signup' ? 'signup' : 'signin';
   const [tab, setTab] = useState<'signin' | 'signup' | 'reset'>(initialMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

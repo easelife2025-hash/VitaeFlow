@@ -174,28 +174,12 @@ export function ResumeProvider({ children }: { children: React.ReactNode }) {
   );
   const [cloudQuotaExceeded, setCloudQuotaExceeded] = useState<boolean>(false);
   const [isProtectedRouteEnforced, setIsProtectedRouteEnforcedState] =
-    useState<boolean>(() => {
-      if (typeof window !== 'undefined') {
-        try {
-          const rawLock = window.localStorage.getItem(ROUTE_LOCK_KEY);
-          return rawLock !== 'false';
-        } catch {
-          return true;
-        }
-      }
-      return true;
-    });
+    useState<boolean>(true);
 
   const draftsRef = useRef<ResumeDraft[]>(drafts);
+  draftsRef.current = drafts;
   const prefsRef = useRef<UserPreferences>(preferences);
-
-  useEffect(() => {
-    draftsRef.current = drafts;
-  }, [drafts]);
-
-  useEffect(() => {
-    prefsRef.current = preferences;
-  }, [preferences]);
+  prefsRef.current = preferences;
 
   // Navigation Sidebar & Mobile Drawer state
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
@@ -229,11 +213,18 @@ export function ResumeProvider({ children }: { children: React.ReactNode }) {
     onApply: () => {},
   });
 
-  // Clean legacy shared storage keys on mount
+  // Load route lock setting on mount (never load shared unauthenticated resumes)
   useEffect(() => {
     try {
+      // Remove any legacy shared storage key so resume storage is strictly per-UID
       window.localStorage.removeItem('vitaeflow_resumes_v2');
       window.localStorage.removeItem('vitaeflow_prefs_v1');
+      const rawLock = window.localStorage.getItem(ROUTE_LOCK_KEY);
+      if (rawLock === 'false') {
+        setIsProtectedRouteEnforcedState(false);
+      } else {
+        setIsProtectedRouteEnforcedState(true);
+      }
     } catch {
       // Ignore
     } finally {
@@ -339,16 +330,9 @@ export function ResumeProvider({ children }: { children: React.ReactNode }) {
       const resumePath = `resumes/${docId}`;
       const resumeRef = doc(db, 'resumes', docId);
 
-      let docExists = false;
       try {
         const snap = await getDoc(resumeRef);
-        docExists = snap.exists();
-      } catch {
-        docExists = false;
-      }
-
-      try {
-        if (!docExists) {
+        if (!snap.exists()) {
           const { data } = buildValidatedResumePayload(draft, safeUid, true);
           await setDoc(resumeRef, data);
         } else {
@@ -638,30 +622,8 @@ export function ResumeProvider({ children }: { children: React.ReactNode }) {
   );
 
   useEffect(() => {
-    let isMounted = true;
-    void (async () => {
-      try {
-        const res = await fetch('/api/ai/generate-summary', {
-          method: 'GET',
-          headers: {
-            'x-ai-custom-limit': '50',
-          },
-        });
-        if (res.ok && isMounted) {
-          const data = await res.json();
-          if (data.usage) {
-            setAiUsage(data.usage);
-          }
-        }
-      } catch {
-        // Keep initial state if offline
-      }
-    })();
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+    syncAiQuota(50, false);
+  }, [syncAiQuota]);
 
   const handleChangeCustomAiLimit = (newLimit: number) => {
     setCustomAiLimit(newLimit);

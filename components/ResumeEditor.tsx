@@ -110,11 +110,11 @@ export default function ResumeEditor({
   );
   const [newSkill, setNewSkill] = useState('');
 
-  const [prevExternalSection, setPrevExternalSection] = useState(externalSection);
-  if (externalSection && externalSection !== prevExternalSection) {
-    setPrevExternalSection(externalSection);
-    setOpenSection(externalSection);
-  }
+  useEffect(() => {
+    if (externalSection) {
+      setOpenSection(externalSection);
+    }
+  }, [externalSection]);
 
   // AI Summary Generation Review State
   const [summaryVariations, setSummaryVariations] = useState<SummaryVariation[]>(
@@ -136,16 +136,14 @@ export default function ResumeEditor({
   const languages = resume.languages || [];
 
   // Clear review panels when switching active resume draft
-  const [prevResumeId, setPrevResumeId] = useState(resume.id);
-  if (resume.id !== prevResumeId) {
-    setPrevResumeId(resume.id);
+  useEffect(() => {
     setSummaryVariations([]);
     setEditableSummaries([]);
     setSummaryError(null);
     setAiSkillSuggestions([]);
     setSelectedAiSkills([]);
     setSkillsError(null);
-  }
+  }, [resume.id]);
 
   // Personal Info Updater
   const updatePersonalInfo = (field: keyof PersonalInfo, value: string) => {

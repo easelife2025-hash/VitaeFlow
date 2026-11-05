@@ -46,11 +46,11 @@ export default function JobMatcherPage() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [prevDraft, setPrevDraft] = useState(activeResume.jobDescriptionDraft);
-  if (activeResume.jobDescriptionDraft && activeResume.jobDescriptionDraft !== prevDraft) {
-    setPrevDraft(activeResume.jobDescriptionDraft);
-    setJobDescription(activeResume.jobDescriptionDraft);
-  }
+  useEffect(() => {
+    if (activeResume.jobDescriptionDraft) {
+      setJobDescription(activeResume.jobDescriptionDraft);
+    }
+  }, [activeResume.jobDescriptionDraft]);
 
   const deterministic = useMemo(
     () => evaluateResumeDeterministically(activeResume, jobDescription),
