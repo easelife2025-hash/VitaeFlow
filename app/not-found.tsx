@@ -1,5 +1,4 @@
 import React from 'react';
-import type { Metadata } from 'next';
 import Link from 'next/link';
 import {
   FileQuestion,
@@ -11,16 +10,6 @@ import {
   BookOpen,
   ArrowRight,
 } from 'lucide-react';
-
-export const metadata: Metadata = {
-  title: '404 – Page Not Found',
-  description:
-    'The page you are looking for could not be found. Return to the VitaeFlow AI Resume Builder, ATS Checker, Job Matcher, or Career Guides.',
-  robots: {
-    index: false,
-    follow: true,
-  },
-};
 
 export default function NotFound() {
   return (

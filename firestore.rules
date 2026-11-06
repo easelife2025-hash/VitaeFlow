@@ -288,7 +288,7 @@ service cloud.firestore {
     match /resumes/{resumeId} {
       allow get: if isSignedIn()
         && isValidId(resumeId)
-        && existing().ownerId == request.auth.uid;
+        && (resource == null || existing().ownerId == request.auth.uid);
 
       allow list: if isSignedIn()
         && existing().ownerId == request.auth.uid;
@@ -298,8 +298,7 @@ service cloud.firestore {
         && isValidResumeRecord(incoming())
         && incoming().id == resumeId
         && incoming().createdAt == request.time
-        && incoming().updatedAt == request.time
-        && exists(/databases/$(database)/documents/users/$(incoming().ownerId));
+        && incoming().updatedAt == request.time;
 
       allow update: if isVerifiedUser()
         && isValidId(resumeId)

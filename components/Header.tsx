@@ -169,53 +169,55 @@ export default function Header() {
 
         {/* Zone 3: Context-Aware Right Actions + Firebase Auth Control */}
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 min-w-0">
-          {user ? (
-            <div className="flex items-center gap-1.5 min-w-0">
-              <Link
-                href="/settings"
-                title={`${userName}${userEmail ? ` (${userEmail})` : ''}`}
-                className="min-h-[38px] px-2.5 sm:px-3 py-1 rounded-xl border border-[#18B89A]/40 bg-[#18B89A]/10 hover:bg-[#18B89A]/15 text-left flex items-center gap-2 max-w-[165px] sm:max-w-[230px] transition-colors"
-              >
-                <div className="w-6 h-6 rounded-full bg-[#6D5CE8] text-white text-[10px] font-bold flex items-center justify-center shrink-0">
-                  <UserIcon className="w-3.5 h-3.5" />
-                </div>
-                <div className="min-w-0 leading-tight">
-                  <span className="block text-[11px] font-bold text-[#18181B] truncate">
-                    {userName}
-                  </span>
-                  {userEmail && (
-                    <span className="block text-[10px] text-slate-600 truncate">
-                      {userEmail}
+          {!isLandingPage && (
+            user ? (
+              <div className="flex items-center gap-1.5 min-w-0">
+                <Link
+                  href="/settings"
+                  title={`${userName}${userEmail ? ` (${userEmail})` : ''}`}
+                  className="min-h-[38px] px-2.5 sm:px-3 py-1 rounded-xl border border-[#18B89A]/40 bg-[#18B89A]/10 hover:bg-[#18B89A]/15 text-left flex items-center gap-2 max-w-[165px] sm:max-w-[230px] transition-colors"
+                >
+                  <div className="w-6 h-6 rounded-full bg-[#6D5CE8] text-white text-[10px] font-bold flex items-center justify-center shrink-0">
+                    <UserIcon className="w-3.5 h-3.5" />
+                  </div>
+                  <div className="min-w-0 leading-tight">
+                    <span className="block text-[11px] font-bold text-[#18181B] truncate">
+                      {userName}
                     </span>
-                  )}
-                </div>
-              </Link>
-              <button
-                type="button"
-                onClick={async () => {
-                  await handleSignOut();
-                  router.push('/');
-                }}
-                title="Log out of your account"
-                className="hidden sm:inline-flex min-h-[38px] px-2.5 py-1.5 rounded-xl border border-slate-200 hover:border-slate-300 bg-white text-xs font-semibold text-slate-600 hover:text-[#18181B] items-center gap-1 cursor-pointer shrink-0"
+                    {userEmail && (
+                      <span className="block text-[10px] text-slate-600 truncate">
+                        {userEmail}
+                      </span>
+                    )}
+                  </div>
+                </Link>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await handleSignOut();
+                    router.push('/');
+                  }}
+                  title="Log out of your account"
+                  className="hidden sm:inline-flex min-h-[38px] px-2.5 py-1.5 rounded-xl border border-slate-200 hover:border-slate-300 bg-white text-xs font-semibold text-slate-600 hover:text-[#18181B] items-center gap-1 cursor-pointer shrink-0"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span className="hidden lg:inline">Log Out</span>
+                </button>
+              </div>
+            ) : pathname !== '/login' ? (
+              <Link
+                href={
+                  pathname && pathname !== '/' && pathname !== '/login'
+                    ? `/login?redirect=${encodeURIComponent(pathname)}`
+                    : '/login'
+                }
+                className="min-h-[38px] px-2.5 sm:px-3 py-1.5 rounded-xl border border-[#6D5CE8]/35 bg-[#6D5CE8]/[0.06] hover:bg-[#6D5CE8]/15 text-xs font-semibold text-[#6D5CE8] flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
               >
-                <LogOut className="w-3.5 h-3.5" />
-                <span className="hidden lg:inline">Log Out</span>
-              </button>
-            </div>
-          ) : pathname !== '/login' ? (
-            <Link
-              href={
-                pathname && pathname !== '/' && pathname !== '/login'
-                  ? `/login?redirect=${encodeURIComponent(pathname)}`
-                  : '/login'
-              }
-              className="min-h-[38px] px-2.5 sm:px-3 py-1.5 rounded-xl border border-[#6D5CE8]/35 bg-[#6D5CE8]/[0.06] hover:bg-[#6D5CE8]/15 text-xs font-semibold text-[#6D5CE8] flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
-            >
-              <LogIn className="w-3.5 h-3.5 shrink-0" />
-              <span>Sign In</span>
-            </Link>
-          ) : null}
+                <LogIn className="w-3.5 h-3.5 shrink-0" />
+                <span>Sign In</span>
+              </Link>
+            ) : null
+          )}
 
           {!isLandingPage && pathname !== '/login' && user && (
             <button
@@ -232,22 +234,13 @@ export default function Header() {
           )}
 
           {isLandingPage ? (
-            <>
-              <Link
-                href="/dashboard"
-                className="hidden sm:inline-flex min-h-[40px] px-3.5 py-2 rounded-xl border border-slate-200 hover:border-[#6D5CE8]/40 bg-white text-xs sm:text-sm font-semibold text-[#18181B] items-center gap-1.5 transition-all whitespace-nowrap"
-              >
-                <LayoutGrid className="w-3.5 h-3.5 text-[#6D5CE8]" />
-                <span>Open Dashboard</span>
-              </Link>
-              <Link
-                href="/resume-builder"
-                className="min-h-[40px] px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold text-white bg-[#6D5CE8] rounded-xl hover:bg-[#5B4AD6] active:scale-[0.98] transition-all shadow-sm shadow-[#6D5CE8]/25 flex items-center gap-1.5 whitespace-nowrap shrink-0"
-              >
-                <span>Build My Resume</span>
-                <ArrowRight className="w-3.5 h-3.5 shrink-0" />
-              </Link>
-            </>
+            <Link
+              href="/resume-builder"
+              className="min-h-[40px] px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold text-white bg-[#6D5CE8] rounded-xl hover:bg-[#5B4AD6] active:scale-[0.98] transition-all shadow-sm shadow-[#6D5CE8]/25 flex items-center gap-1.5 whitespace-nowrap shrink-0"
+            >
+              <span>Build My Resume</span>
+              <ArrowRight className="w-3.5 h-3.5 shrink-0" />
+            </Link>
           ) : pathname !== '/login' && user ? (
             <button
               type="button"

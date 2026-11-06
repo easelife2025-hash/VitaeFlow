@@ -93,34 +93,6 @@ export default function LandingInteractiveDemo() {
               Test how VitaeFlow upgrades real resume bullets without inventing facts, or inspect how our hybrid ATS Checker scores section completeness and keyword alignment.
             </p>
           </div>
-
-          {/* Demo Switcher Buttons */}
-          <div className="inline-flex p-1.5 rounded-2xl bg-white border border-slate-200 shadow-2xs self-start">
-            <button
-              type="button"
-              onClick={() => setDemoTab('ai-builder')}
-              className={`min-h-[40px] px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-2 cursor-pointer ${
-                demoTab === 'ai-builder'
-                  ? 'bg-[#6D5CE8] text-white shadow-xs'
-                  : 'text-slate-600 hover:text-[#18181B]'
-              }`}
-            >
-              <Wand2 className="w-4 h-4" />
-              <span>AI Resume Builder Demo</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setDemoTab('ats-checker')}
-              className={`min-h-[40px] px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-2 cursor-pointer ${
-                demoTab === 'ats-checker'
-                  ? 'bg-[#18B89A] text-white shadow-xs'
-                  : 'text-slate-600 hover:text-[#18181B]'
-              }`}
-            >
-              <ShieldCheck className="w-4 h-4" />
-              <span>ATS & Job Matcher Demo</span>
-            </button>
-          </div>
         </div>
 
         {/* Interactive Stage */}

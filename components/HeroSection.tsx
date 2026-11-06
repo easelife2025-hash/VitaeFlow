@@ -2,6 +2,7 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { motion } from 'motion/react';
 import {
   Sparkles,
@@ -87,11 +88,12 @@ export default function HeroSection() {
               className="w-full h-full object-cover object-center"
             />
           ) : (
-            <img
+            <Image
               src={INTERVIEW_SCENES[activeSceneIndex].src}
               alt={INTERVIEW_SCENES[activeSceneIndex].caption}
+              fill
               referrerPolicy="no-referrer"
-              className="w-full h-full object-cover object-center transition-opacity duration-700"
+              className="object-cover object-center transition-opacity duration-700"
             />
           )}
 
@@ -283,44 +285,6 @@ export default function HeroSection() {
               </span>
             </div>
           </motion.div>
-
-          {/* Bottom Bar: Scene Indicator Bars (Left) & Video Pause/Play Toggle (Right) */}
-          <div className="mt-6 pt-3.5 border-t border-white/10 flex items-center justify-between gap-4">
-            <div className="flex items-center gap-2" aria-label="Video scene indicator">
-              {INTERVIEW_SCENES.map((scene, idx) => (
-                <button
-                  key={scene.role}
-                  type="button"
-                  onClick={() => setActiveSceneIndex(idx)}
-                  aria-label={`Scene ${idx + 1}: ${scene.role}`}
-                  className={`h-1.5 rounded-full transition-all cursor-pointer ${
-                    activeSceneIndex === idx
-                      ? 'w-6 bg-[#6D5CE8]'
-                      : 'w-2 bg-white/30 hover:bg-white/50'
-                  }`}
-                />
-              ))}
-              <span className="hidden sm:inline-block ml-1.5 text-xs text-slate-300">
-                {INTERVIEW_SCENES[activeSceneIndex].role} ·{' '}
-                {INTERVIEW_SCENES[activeSceneIndex].caption}
-              </span>
-            </div>
-
-            <button
-              type="button"
-              onClick={togglePlayPause}
-              aria-label={
-                isPlaying ? 'Pause background video' : 'Play background video'
-              }
-              className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 backdrop-blur-md text-white flex items-center justify-center transition-colors cursor-pointer shrink-0"
-            >
-              {isPlaying ? (
-                <Pause className="w-3 h-3" />
-              ) : (
-                <Play className="w-3 h-3 fill-white" />
-              )}
-            </button>
-          </div>
         </div>
       </section>
     </div>

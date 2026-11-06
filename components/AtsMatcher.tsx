@@ -50,11 +50,11 @@ export default function AtsMatcher({
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  React.useEffect(() => {
-    if (resume.jobDescriptionDraft) {
-      setJobDescription(resume.jobDescriptionDraft);
-    }
-  }, [resume.jobDescriptionDraft]);
+  const [prevDraft, setPrevDraft] = useState(resume.jobDescriptionDraft);
+  if (resume.jobDescriptionDraft && resume.jobDescriptionDraft !== prevDraft) {
+    setPrevDraft(resume.jobDescriptionDraft);
+    setJobDescription(resume.jobDescriptionDraft);
+  }
 
   // Instant deterministic evaluation on every resume or JD change
   const deterministic = useMemo(
